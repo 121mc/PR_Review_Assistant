@@ -5,7 +5,7 @@ const SECRET_KEY_PATTERN = /(authorization|api[-_]?key|token|secret|password)/i;
 const TOKEN_PATTERNS = [
   /gh[pousr]_[A-Za-z0-9_]+/g,
   /github_pat_[A-Za-z0-9_]+/g,
-  /sk-[A-Za-z0-9_-]+/g,
+  /sk[-_][A-Za-z0-9_-]+/g,
   /(authorization\s*[:=]\s*)(bearer|token|basic)\s+[^\s,;]+/gi,
   /((?:api[-_]?key|token|secret|password)\s*[:=]\s*)["']?[^"',\s}]+/gi,
 ];
