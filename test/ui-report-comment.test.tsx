@@ -167,6 +167,7 @@ describe("report rendering and review comment publishing", () => {
   it.each([
     ["empty", ""],
     ["unsafe scheme", "javascript:alert(1)"],
+    ["wrong host", "https://evil.test/comment"],
   ])("rejects a %s GitHub comment URL response", async (_label, commentUrl) => {
     const { user } = await renderAnalyzedReport({
       commentResponse: jsonResponse({ commentUrl }),
