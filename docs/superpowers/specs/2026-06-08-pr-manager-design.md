@@ -79,7 +79,7 @@ Language-aware context files:
 - Input: `AnalysisContext`, fixed rubric, English output instruction, LLM base URL, LLM API key, and model.
 - Behavior: Call an OpenAI-compatible Chat Completions API. Ask the model to return strict JSON matching the report schema, and include a complete example JSON object in the prompt. Try `response_format: { "type": "json_object" }` when supported, but fall back to ordinary chat completion if the provider rejects that parameter. Retry once when JSON parsing or schema validation fails.
 - Output: A validated `AnalysisReport`.
-- Boundary conditions: Scores must be numeric values from 0 to 10. Verdict must be `approve`, `request_changes`, or `comment`. Higher scores always mean the PR is more acceptable. The model generates `overallScore`, but the prompt must require logical alignment with the six sub-scores and allow severe issues to dominate the overall score when warranted.
+- Boundary conditions: Scores must be numeric values from 0 to 10. Verdict must be `approve`, `request_changes`, or `comment`. Higher scores always mean the PR is more acceptable. The model generates `overallScore`, but the prompt must require logical alignment with the six sub-scores and allow severe issues to dominate the overall score when warranted. That explanation is captured in `overallRationale`, which must explicitly name the main sub-score drivers for the overall score.
 - Error handling: Return structured errors for timeout, invalid key, unknown model, unsupported API response shape, invalid JSON after retry, and schema validation failure.
 
 ### 3.5 Report Rendering
@@ -121,6 +121,10 @@ Language-aware context files:
 - Logs and error messages must redact tokens, API keys, authorization headers, and raw secret-bearing payloads.
 - Every API route must use standardized try/catch error handling that redacts secrets before returning errors to the browser.
 - Public and private repositories are supported when token permissions allow access.
+- Minimum GitHub token scopes for version one:
+  - Public repositories: fine-grained token with contents read access, pull requests read access, and issues write access for publishing comments, or classic token with `public_repo`.
+  - Private repositories: fine-grained token with access to the target repository, contents read access, pull requests read access, and issues write access for publishing comments, or classic token with `repo`.
+  - Missing read scope should map to `GITHUB_UNAUTHORIZED`, `GITHUB_FORBIDDEN`, or repository/PR not found based on GitHub's response; UI copy must explain that private repositories can appear missing when token permissions are insufficient.
 - Public deployment is not recommended for version one because browser-stored secrets are sent to the app server during API calls.
 
 ### Usability
@@ -170,14 +174,17 @@ flowchart LR
 ### Components
 
 - Frontend workspace: Link input, settings panel, PR picker, PR summary, analysis progress, report viewer, review draft, history panel.
-- API routes: GitHub URL parsing, PR listing, PR detail/context collection, LLM analysis, comment publishing, health check.
+- API routes: GitHub URL parsing, PR listing, PR detail preview, LLM analysis, comment publishing, health check.
 - Library layer:
   - `lib/url.ts`: GitHub URL parsing and validation.
   - `lib/github.ts`: GitHub REST API wrapper.
   - `lib/context.ts`: language-aware context collection and truncation.
   - `lib/llm.ts`: OpenAI-compatible API client.
   - `lib/report-schema.ts`: report schema and validation.
+  - `lib/report-markdown.ts`: validated report-to-Markdown rendering.
   - `lib/storage.ts`: browser storage types and helpers.
+  - `lib/client-api.ts`: browser-side API client wrapper for local API routes.
+  - `lib/ui.ts`: small UI helpers such as class merging and display label maps.
 
 ### Data Flow
 
@@ -198,6 +205,29 @@ flowchart LR
 - OpenAI-compatible Chat Completions API for analysis.
 - Browser localStorage for configuration secrets.
 - Browser IndexedDB for local report history.
+
+### Language and Context Mapping
+
+Detected language values must use canonical display names so tests, prompts, and UI agree:
+
+- `TypeScript`
+- `JavaScript`
+- `Python`
+- `Java`
+- `Go`
+- `Other`
+
+Repository context file `kind` is assigned by path:
+
+- `readme`: `README`, `README.*`
+- `contributing`: `CONTRIBUTING`, `CONTRIBUTING.*`
+- `package`: `package.json`
+- `lint`: ESLint, Prettier, Ruff, mypy, Checkstyle, SpotBugs, golangci-lint configuration
+- `test`: Jest, Vitest, pytest, and similar test runner configuration
+- `build`: `tsconfig.json`, `next.config.*`, `pom.xml`, `build.gradle`, `go.mod`, `go.sum`, `pyproject.toml`, `requirements.txt`, `setup.cfg`
+- `ci`: `.github/workflows/*`
+- `language`: language-specific files that do not fit the previous buckets
+- `other`: any included context file with no more specific mapping
 
 ## 6. Data Model
 
@@ -286,6 +316,7 @@ flowchart LR
 - `scores.testCoverage: ScoreItem`
 - `scores.maintainability: ScoreItem`
 - `overallScore: number`
+- `overallRationale: string`
 - `verdict: "approve" | "request_changes" | "comment"`
 - `reviewComment: string`
 - `usedTruncatedContext: boolean`
@@ -297,6 +328,7 @@ flowchart LR
 - `sourceReportId: string`
 - `publishedAt?: string`
 - `githubCommentUrl?: string`
+- Constraint: `sourceReportId` points to `HistoryRecord.id` after a report is saved. Before history save completes, the draft may be held in component state without a `ReviewCommentDraft` record.
 
 ### HistoryRecord
 
@@ -370,10 +402,12 @@ Request:
 Success:
 
 ```json
-{ "pullRequest": {}, "changedFiles": [], "contextPreview": { "truncated": false, "detectedLanguages": ["TypeScript"] } }
+{ "pullRequest": {} }
 ```
 
-Errors: `GITHUB_UNAUTHORIZED`, `GITHUB_PR_NOT_FOUND`, `GITHUB_RATE_LIMITED`, `CONTEXT_COLLECTION_FAILED`.
+Errors: `GITHUB_UNAUTHORIZED`, `GITHUB_PR_NOT_FOUND`, `GITHUB_RATE_LIMITED`, `GITHUB_API_ERROR`.
+
+This route only returns PR metadata/detail for UI preview. It must not collect changed files, repository context, or truncation previews; those responsibilities belong to the context collector used by `/api/analyze`.
 
 ### POST /api/analyze
 
@@ -397,6 +431,7 @@ Success:
     "summary": "string",
     "scores": {},
     "overallScore": 8,
+    "overallRationale": "The PR is generally acceptable because the implementation is focused and tests are adequate, but maintainability has minor follow-up concerns.",
     "verdict": "comment",
     "reviewComment": "markdown string",
     "usedTruncatedContext": false
@@ -471,7 +506,7 @@ Success:
 - A medium or small PR can generate an English report within 60 seconds under normal API conditions.
 - The report includes all six fixed dimensions and an overall score.
 - Every score is between 0 and 10.
-- The model-generated overall score is schema-valid and logically explained in relation to the six sub-scores.
+- The model-generated overall score is schema-valid and logically explained in `overallRationale` in relation to the six sub-scores.
 - The report includes a verdict of `approve`, `request_changes`, or `comment`.
 - LLM providers that reject JSON `response_format` still work through fallback completion.
 - Invalid LLM JSON triggers one retry before a user-facing error.
@@ -487,7 +522,7 @@ Success:
 ### Comment Publishing
 
 - The app publishes exactly one overall PR comment only after explicit confirmation.
-- Duplicate clicks while publishing do not create duplicate in-flight requests.
+- Duplicate-click protection is a frontend/UI responsibility for version one. The backend comment route validates input and forwards one request to GitHub, but it does not implement cross-request idempotency keys or persistent duplicate detection.
 - Failed publishing keeps the draft visible and copyable.
 
 ### Local History
