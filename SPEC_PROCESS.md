@@ -297,6 +297,36 @@ AI 给出最近 10 条、最近 30 条、只保存摘要等选项。用户回答
 - Task 8 依赖 Task 5/6。
 - UI 任务可在后端 API 任务期间用 mock 数据并行推进。
 
+## 冷启动验证与反馈补充
+
+本轮 spec 与 plan 的主要生成者是 `codex：gpt-5.5-high`。设计规格 `docs/superpowers/specs/2026-06-08-pr-manager-design.md` 和实现计划 `docs/superpowers/plans/2026-06-08-pr-manager-implementation.md` 均由 `codex：gpt-5.5-high` 在 Superpowers 的 `brainstorming` 与 `writing-plans` 流程下完成。
+
+随后进行了冷启动验证。用户让 `antigravity：gemini-3.5-flash-high` 从零开始执行实现计划中的 Task 1 和 Task 2。该模型完成了 Task 1 与 Task 2，没有提出额外问题。这说明脚手架任务和共享契约任务的计划粒度基本可执行，至少对一个冷启动智能体而言，任务目标、文件范围、测试步骤和提交边界足够明确。
+
+之后，用户又让 `antigravity：gemini-3.5-flash-high` 试图继续完成其他 task。此时它提出了一组问题和风险点，这些问题被整理在 `specs_and_plans_review.md` 中。主要反馈包括：
+
+- Next.js App Router 与 React 的 SSR/hydration 风险：不能在初始 render 中直接读取 localStorage 或 IndexedDB。
+- Context truncation 不能简单拼接后 slice，需要按优先级和 per-file budget 分配。
+- Design spec 中的 open questions 需要在进入实现前关闭。
+- OpenAI-compatible API 的 `response_format` 并非所有 provider 都支持，需要 fallback。
+- Vitest 中 IndexedDB 需要 `fake-indexeddb/auto`。
+- Markdown 渲染需要避免 raw HTML/XSS。
+- API routes 应明确 `dynamic = "force-dynamic"`，并统一做错误脱敏。
+
+处理决策：
+
+用户把这份反馈交回给 `codex：gpt-5.5-high`，要求根据反馈文件修改文档内容。`codex：gpt-5.5-high` 没有把反馈文件本身并入正式文档，而是修改了已有 spec 和 plan：
+
+- 在 spec 中补充 mounted 后读取浏览器存储的约束，避免 SSR crash 和 hydration mismatch。
+- 在 spec 和 plan 中明确 `120000` 字符上下文预算、patch/context 文件 per-file limit、截断标记和避免大文件饿死其他上下文。
+- 将原来的 open questions 改为 resolved decisions：推荐模型示例、history export/import 延后、上下文预算固定、overall score 由模型生成但必须解释。
+- 在 plan 中补充 LLM `response_format` fallback 的失败测试。
+- 在 Task 1 中补充 `fake-indexeddb/auto` 测试环境要求。
+- 在 Task 11 中补充 Markdown raw HTML 不渲染的安全要求与测试。
+- 在 API route 相关 task 中补充 `dynamic = "force-dynamic"` 和统一 redacted error handling。
+
+这次验证暴露出一个事实：原计划对“功能怎么做”已经足够细，但对现代 Next.js、LLM provider 兼容性、测试环境 polyfill 和 XSS 这类执行期陷阱描述还不够硬。`antigravity：gemini-3.5-flash-high` 的冷启动尝试起到了外部审稿作用，`codex：gpt-5.5-high` 则负责把这些问题沉淀回正式 spec 和 plan。
+
 ## 对 Superpowers brainstorming 的反思
 
 ### 做得好的地方
