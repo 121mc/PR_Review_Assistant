@@ -95,6 +95,17 @@ describe("GitHub API routes", () => {
     expect(githubMocks.createPullComment).not.toHaveBeenCalled();
   });
 
+  it("rejects comment publishing when github token is empty", async () => {
+    const response = await publishComment(
+      jsonRequest({ owner: "octo", repo: "repo", pullNumber: 42, githubToken: " ", body: "Looks good." }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ code: "GITHUB_UNAUTHORIZED" });
+    expect(githubMocks.GitHubClient).not.toHaveBeenCalled();
+    expect(githubMocks.createPullComment).not.toHaveBeenCalled();
+  });
+
   it("returns top-level redacted errors from comment publishing", async () => {
     githubMocks.createPullComment.mockRejectedValue(
       createApiError(

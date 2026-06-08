@@ -53,12 +53,21 @@ export class GitHubClient {
   constructor(private readonly token: string) {}
 
   async listOpenPulls(owner: string, repo: string): Promise<PullRequestSummary[]> {
-    const pulls = await this.requestJson<GitHubPullResponse[]>(
-      `/repos/${encodeSegment(owner)}/${encodeSegment(repo)}/pulls?state=open&per_page=${PAGE_SIZE}`,
-      { notFoundCode: "GITHUB_REPO_NOT_FOUND" },
-    );
+    const pulls: PullRequestSummary[] = [];
+    let page = 1;
 
-    return pulls.map((pull) => normalizePullSummary(pull, owner, repo));
+    while (true) {
+      const pagePulls = await this.requestJson<GitHubPullResponse[]>(
+        `/repos/${encodeSegment(owner)}/${encodeSegment(repo)}/pulls?state=open&per_page=${PAGE_SIZE}&page=${page}`,
+        { notFoundCode: "GITHUB_REPO_NOT_FOUND" },
+      );
+
+      pulls.push(...pagePulls.map((pull) => normalizePullSummary(pull, owner, repo)));
+      if (pagePulls.length < PAGE_SIZE) {
+        return pulls;
+      }
+      page += 1;
+    }
   }
 
   async getPullDetail(owner: string, repo: string, pullNumber: number): Promise<PullRequestDetail> {
@@ -112,7 +121,7 @@ export class GitHubClient {
       return null;
     }
 
-    return Buffer.from(payload.content.replace(/\s/g, ""), "base64").toString("utf8");
+    return decodeTextContent(payload.content);
   }
 
   async createPullComment(
@@ -198,6 +207,36 @@ function normalizeChangedFile(file: GitHubChangedFileResponse): ChangedFile {
     isBinary: patch === undefined,
     truncated: false,
   };
+}
+
+function decodeTextContent(base64Content: string): string | null {
+  const bytes = Buffer.from(base64Content.replace(/\s/g, ""), "base64");
+  let text: string;
+
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+
+  if (text.includes("\u0000") || hasHighControlCharacterRatio(text)) {
+    return null;
+  }
+
+  return text;
+}
+
+function hasHighControlCharacterRatio(text: string): boolean {
+  if (text.length === 0) {
+    return false;
+  }
+
+  const controlCharacters = Array.from(text).filter((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 && code !== 9 && code !== 10 && code !== 13;
+  }).length;
+
+  return controlCharacters / text.length > 0.1;
 }
 
 async function readGitHubErrorMessage(response: Response): Promise<string> {

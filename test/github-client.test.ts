@@ -46,6 +46,46 @@ describe("GitHubClient", () => {
     ]);
   });
 
+  it("paginates open pull requests", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/pulls"), ({ request }) => {
+        const url = new URL(request.url);
+        const page = url.searchParams.get("page");
+        expect(url.searchParams.get("state")).toBe("open");
+        expect(url.searchParams.get("per_page")).toBe("100");
+
+        if (page === "1") {
+          return HttpResponse.json(
+            Array.from({ length: 100 }, (_, index) =>
+              githubPullResponse({
+                number: index + 1,
+                title: `PR ${index + 1}`,
+                html_url: `https://github.com/octo/repo/pull/${index + 1}`,
+              }),
+            ),
+          );
+        }
+
+        if (page === "2") {
+          return HttpResponse.json([
+            githubPullResponse({
+              number: 101,
+              title: "Final PR",
+              html_url: "https://github.com/octo/repo/pull/101",
+            }),
+          ]);
+        }
+
+        return HttpResponse.json({ message: `Unexpected page ${page}` }, { status: 500 });
+      }),
+    );
+
+    const pulls = await new GitHubClient("ghp_test").listOpenPulls("octo", "repo");
+
+    expect(pulls).toHaveLength(101);
+    expect(pulls.at(-1)).toMatchObject({ number: 101, title: "Final PR" });
+  });
+
   it("publishes an issue comment for a pull request", async () => {
     useMswHandlers(
       http.post(githubApiUrl("/repos/octo/repo/issues/42/comments"), async ({ request }) => {
@@ -114,6 +154,75 @@ describe("GitHubClient", () => {
       code: "GITHUB_UNAUTHORIZED",
       status: 401,
     });
+  });
+
+  it("returns text file content", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/contents/src/file.ts"), ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get("ref")).toBe("main");
+
+        return HttpResponse.json({
+          content: Buffer.from("export const value = 1;\n", "utf8").toString("base64"),
+          encoding: "base64",
+        });
+      }),
+    );
+
+    await expect(new GitHubClient("ghp_test").getFileContent("octo", "repo", "src/file.ts", "main")).resolves.toBe(
+      "export const value = 1;\n",
+    );
+  });
+
+  it("returns null for missing file content", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/contents/missing.ts"), () =>
+        HttpResponse.json({ message: "Not Found" }, { status: 404 }),
+      ),
+    );
+
+    await expect(new GitHubClient("ghp_test").getFileContent("octo", "repo", "missing.ts", "main")).resolves.toBeNull();
+  });
+
+  it("returns null for directory content payloads", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/contents/src"), () =>
+        HttpResponse.json([{ name: "file.ts", type: "file" }]),
+      ),
+    );
+
+    await expect(new GitHubClient("ghp_test").getFileContent("octo", "repo", "src", "main")).resolves.toBeNull();
+  });
+
+  it("returns null for binary or invalid utf-8 file content", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/contents/invalid.bin"), () =>
+        HttpResponse.json({
+          content: Buffer.from([0xff, 0xfe, 0xfd]).toString("base64"),
+          encoding: "base64",
+        }),
+      ),
+      http.get(githubApiUrl("/repos/octo/repo/contents/nul.txt"), () =>
+        HttpResponse.json({
+          content: Buffer.from("text\u0000with-nul", "utf8").toString("base64"),
+          encoding: "base64",
+        }),
+      ),
+      http.get(githubApiUrl("/repos/octo/repo/contents/controls.txt"), () =>
+        HttpResponse.json({
+          content: Buffer.from([1, 2, 3, 4, 5, 65]).toString("base64"),
+          encoding: "base64",
+        }),
+      ),
+    );
+
+    await expect(
+      new GitHubClient("ghp_test").getFileContent("octo", "repo", "invalid.bin", "main"),
+    ).resolves.toBeNull();
+    await expect(new GitHubClient("ghp_test").getFileContent("octo", "repo", "nul.txt", "main")).resolves.toBeNull();
+    await expect(
+      new GitHubClient("ghp_test").getFileContent("octo", "repo", "controls.txt", "main"),
+    ).resolves.toBeNull();
   });
 });
 

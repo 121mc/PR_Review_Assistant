@@ -26,8 +26,12 @@ export async function POST(request: Request) {
     if (!isNonEmptyString(body.body)) {
       throw createApiError("COMMENT_BODY_EMPTY", "Comment body must not be empty", undefined, 400);
     }
+    const githubToken = readOptionalString(body.githubToken);
+    if (githubToken.trim() === "") {
+      throw createApiError("GITHUB_UNAUTHORIZED", "GitHub token is required to publish comments", undefined, 401);
+    }
 
-    const client = new GitHubClient(readOptionalString(body.githubToken));
+    const client = new GitHubClient(githubToken);
     const result = await client.createPullComment(body.owner, body.repo, body.pullNumber, body.body);
 
     return Response.json(result);
