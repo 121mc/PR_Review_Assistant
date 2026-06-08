@@ -112,8 +112,9 @@ Create or modify these files:
 
 - Use Next.js App Router and TypeScript.
 - Add scripts: `dev`, `build`, `start`, `test`, `test:watch`, `lint`, `typecheck`.
-- Add dependencies: `@next/react` via `next`, `react`, `react-dom`, `zod`, `idb`, `react-markdown`, `lucide-react`, `clsx`, `tailwind-merge`.
-- Add dev dependencies: `typescript`, `vitest`, `@vitejs/plugin-react`, `jsdom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `msw`, `tailwindcss`, `postcss`, `autoprefixer`, `eslint`, `eslint-config-next`.
+- Add dependencies: `next`, `react`, `react-dom`, `zod`, `idb`, `react-markdown`, `lucide-react`, `clsx`, `tailwind-merge`.
+- Add dev dependencies: `typescript`, `vitest`, `@vitejs/plugin-react`, `jsdom`, `fake-indexeddb`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, `msw`, `tailwindcss`, `postcss`, `autoprefixer`, `eslint`, `eslint-config-next`.
+- Configure `vitest.setup.ts` with `import "fake-indexeddb/auto";` so IndexedDB-backed storage tests do not crash in jsdom/Node.
 - Start `app/page.tsx` with a minimal Chinese landing state that says `PR 管理器`.
 - `GET /api/health` returns `{ ok: true }`.
 
@@ -145,6 +146,8 @@ Create `app/api/health/route.ts`:
 
 ```ts
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json({ ok: true });
@@ -228,6 +231,7 @@ git commit -m "chore: scaffold pr manager app"
 - Enforce verdict enum: `approve`, `request_changes`, `comment`.
 - Add `createApiError(code, message, details?, status?)`.
 - Add `redactSecrets(value)` to remove tokens, API keys, and authorization header values from strings/objects.
+- Add a `jsonError(error, fallbackCode, fallbackStatus)` helper that redacts caught errors before building `NextResponse.json(...)` route responses.
 - Add `reportToMarkdown(report)` returning stable English Markdown.
 
 - [ ] **Step 1: Write failing report schema tests**
@@ -518,6 +522,8 @@ git commit -m "feat: parse github links"
 - Publish comments through `POST /repos/{owner}/{repo}/issues/{pull_number}/comments`.
 - Map 401 to `GITHUB_UNAUTHORIZED`, 403 to `GITHUB_FORBIDDEN` or `GITHUB_RATE_LIMITED`, 404 to `GITHUB_REPO_NOT_FOUND` or `GITHUB_PR_NOT_FOUND` depending on operation.
 - Do not log tokens.
+- Every GitHub API route exports `dynamic = "force-dynamic"`.
+- Every GitHub API route wraps logic in try/catch and returns only secret-redacted structured errors.
 
 - [ ] **Step 1: Write failing GitHub client tests**
 
@@ -591,7 +597,19 @@ export class GitHubClient {
 }
 ```
 
-Implement API routes that validate required fields, call the client, and return structured errors from `lib/errors.ts`.
+Implement API routes that validate required fields, call the client, and return structured errors from `lib/errors.ts`. Each route file must include:
+
+```ts
+export const dynamic = "force-dynamic";
+```
+
+Each route catch block must use the shared redaction helper before returning an error:
+
+```ts
+} catch (error) {
+  return jsonError(error, "GITHUB_API_ERROR", 500);
+}
+```
 
 - [ ] **Step 4: Run GitHub route verification**
 
@@ -629,7 +647,10 @@ git commit -m "feat: add github api integration"
 
 - Accept config `{ baseUrl, apiKey, model }`.
 - Normalize base URL so both `https://host/v1` and `https://host/v1/` work.
-- Send chat messages with a system prompt that enforces English report text, fixed six-dimension rubric, JSON-only response, and higher-is-better scores.
+- Send chat messages with a system prompt that enforces English report text, fixed six-dimension rubric, JSON-only response, higher-is-better scores, and logical alignment between `overallScore` and the six sub-scores.
+- Include a complete JSON example matching `AnalysisReport` in the prompt.
+- Try `response_format: { type: "json_object" }` on the first provider request.
+- If the provider rejects `response_format` with a parameter or 400-style compatibility error, retry once without `response_format` before treating the call as failed.
 - Parse JSON from `choices[0].message.content`.
 - Retry once when JSON parsing or `parseAnalysisReport` fails.
 - Map HTTP 401 to `LLM_UNAUTHORIZED`, 404 to `LLM_MODEL_NOT_FOUND`, timeout to `LLM_TIMEOUT`, invalid JSON after retry to `LLM_INVALID_JSON`.
@@ -684,6 +705,29 @@ describe("analyzeWithLlm", () => {
     expect(report.verdict).toBe("comment");
     expect(calls).toBe(2);
   });
+
+  it("falls back when response_format is rejected by the provider", async () => {
+    let calls = 0;
+    server.use(
+      http.post("https://llm.test/v1/chat/completions", async ({ request }) => {
+        calls += 1;
+        const body = (await request.json()) as { response_format?: unknown };
+        if (body.response_format) {
+          return HttpResponse.json({ error: { message: "Unknown parameter: response_format" } }, { status: 400 });
+        }
+        return HttpResponse.json({
+          choices: [{ message: { content: JSON.stringify(validReport) } }],
+        });
+      }),
+    );
+
+    const report = await analyzeWithLlm({
+      llm: { baseUrl: "https://llm.test/v1", apiKey: "sk_test", model: "model-a" },
+      context: minimalAnalysisContext(),
+    });
+    expect(report.overallScore).toBe(8);
+    expect(calls).toBe(2);
+  });
 });
 ```
 
@@ -706,7 +750,8 @@ export async function analyzeWithLlm(input: {
   llm: LlmConfig;
   context: AnalysisContext;
 }): Promise<AnalysisReport> {
-  // Build messages, call chat completions, parse JSON, validate, retry once.
+  // Build messages, try JSON response_format, fall back on provider parameter errors,
+  // parse JSON, validate, and retry once for invalid model output.
 }
 ```
 
@@ -754,6 +799,14 @@ git commit -m "feat: add llm analysis client"
   - Go: `go.mod`, `go.sum`, `.golangci.yml`.
   - Common: `README.md`, `README`, `CONTRIBUTING.md`, `CONTRIBUTING`, `.github/pull_request_template.md`.
 - Use a fixed character budget such as `MAX_CONTEXT_CHARS = 120000` for version one.
+- Do not build context by concatenating everything and slicing at `MAX_CONTEXT_CHARS`.
+- Allocate context budget by priority:
+  - PR metadata and description: always include fully.
+  - Changed file summaries and diff headers: high priority.
+  - Changed file patches: apply a per-file soft limit such as `MAX_PATCH_CHARS = 8000`.
+  - Repository context files: apply a per-file soft limit such as `MAX_REPO_CONTEXT_FILE_CHARS = 5000`.
+  - Stop loading additional low-priority files when the total budget is exhausted.
+- Insert local markers such as `[Patch truncated due to file-size limit]` when truncating a patch.
 - Skip binary files and files with no text content.
 - Mark each truncated file and the full context when truncation occurs.
 
@@ -792,6 +845,29 @@ describe("collectAnalysisContext", () => {
     expect(context.truncated).toBe(true);
     expect(context.truncationNotes.length).toBeGreaterThan(0);
   });
+
+  it("does not let one huge patch starve repository context", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [
+        { filename: "src/generated.ts", patch: "x".repeat(200000), isBinary: false },
+        { filename: "src/feature.ts", patch: "@@ small useful patch", isBinary: false },
+      ],
+      files: {
+        "package.json": '{"scripts":{"test":"vitest"}}',
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars: 12000,
+      maxPatchChars: 4000,
+      maxRepoContextFileChars: 2000,
+    });
+
+    expect(context.changedFiles.find((file) => file.filename === "src/generated.ts")?.truncated).toBe(true);
+    expect(context.changedFiles.find((file) => file.filename === "src/feature.ts")?.patch).toContain("small useful");
+    expect(context.contextFiles.map((file) => file.path)).toContain("package.json");
+    expect(context.truncationNotes.join("\n")).toContain("Patch truncated");
+  });
 });
 ```
 
@@ -813,7 +889,7 @@ export async function collectAnalysisContext(
   owner: string,
   repo: string,
   pullNumber: number,
-  options: { maxChars?: number } = {},
+  options: { maxChars?: number; maxPatchChars?: number; maxRepoContextFileChars?: number } = {},
 ): Promise<AnalysisContext> {
   // Fetch PR detail, changed files, context files, snippets, and truncation metadata.
 }
@@ -964,6 +1040,8 @@ git commit -m "feat: add local config and history storage"
 - Return `{ report }`.
 - Return `CONFIG_MISSING` for missing fields.
 - Return structured errors without leaking secrets.
+- Export `dynamic = "force-dynamic"` from the route file.
+- Wrap route logic in try/catch and return `jsonError(error, "SERVER_ERROR", 500)` or a more specific redacted structured error.
 
 - [ ] **Step 1: Write failing analyze API tests**
 
@@ -1050,13 +1128,15 @@ Expected: FAIL because `app/api/analyze/route.ts` does not exist.
 Create route with:
 
 ```ts
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
   const body = await request.json();
   // Validate fields, create GitHubClient, collect context, analyze with LLM, return report.
 }
 ```
 
-Use `NextResponse.json(errorBody, { status })` for structured errors.
+Use `NextResponse.json(errorBody, { status })` for structured errors, and use the shared redaction helper in all catch paths.
 
 - [ ] **Step 4: Run analyze verification**
 
@@ -1101,6 +1181,8 @@ git commit -m "feat: orchestrate pull request analysis"
 - Config panel expands when config is incomplete.
 - Link input accepts repository and PR URLs.
 - History panel lists records from IndexedDB and supports delete and clear all.
+- `SettingsPanel` and `HistoryPanel` must use a `mounted` state and read localStorage or IndexedDB only inside `useEffect` or client-only event handlers.
+- The initial server-render-compatible UI must be stable, such as a loading skeleton or empty state, so React does not produce hydration mismatch warnings when browser storage loads.
 - Use restrained dashboard layout: no landing hero, no marketing copy, no nested cards.
 
 - [ ] **Step 1: Write failing UI tests**
@@ -1110,7 +1192,7 @@ Create `test/ui-settings-history.test.tsx`:
 ```tsx
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
 import { loadAppConfig } from "../lib/storage";
 
@@ -1134,6 +1216,12 @@ describe("dashboard shell", () => {
     expect(screen.getByLabelText("GitHub 链接")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "加载" })).toBeInTheDocument();
   });
+
+  it("does not read browser storage during initial render", () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, "getItem");
+    render(<HomePage />);
+    expect(getItemSpy).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -1155,7 +1243,7 @@ Implement accessible labels exactly as used in tests:
 - Button `保存配置`
 - Button `加载`
 
-Use `useEffect` to load config and history only on the client.
+Use `useEffect` to load config and history only on the client. Add `const [mounted, setMounted] = useState(false)` in storage-backed components, set it to true in an effect, and render a stable loading or empty state until mounted.
 
 - [ ] **Step 4: Run UI shell verification**
 
@@ -1328,6 +1416,7 @@ git commit -m "feat: connect pull request selection flow"
 
 - Render six dimension scores and overall score.
 - Render English Markdown with `react-markdown`.
+- Do not render raw HTML from Markdown. Use `react-markdown` with HTML skipped, or add `rehype-sanitize` if later enabling HTML-like content.
 - Show a visible truncated-context notice when `usedTruncatedContext` is true.
 - Save a full `HistoryRecord` after successful analysis.
 - Publish button requires confirmation, disables during request, and calls `/api/github/comment`.
@@ -1385,6 +1474,37 @@ describe("report and comment UI", () => {
     await waitFor(() => expect(screen.getByText("Overall Score")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "发布评论" }));
     await waitFor(() => expect(screen.getByText(/评论已发布/)).toBeInTheDocument());
+  });
+
+  it("does not render raw html from markdown reports", async () => {
+    const unsafeReport = {
+      ...validReport,
+      reviewComment: "Safe text <img src=x onerror=alert(1)>",
+      summary: "Summary <script>alert(1)</script>",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/api/github/parse-url")) {
+          return jsonResponse({ type: "pull", owner: "octo", repo: "repo", pullNumber: 42 });
+        }
+        if (url.includes("/api/github/pull-detail")) {
+          return jsonResponse({ pullRequest: pullSummary(), changedFiles: [], contextPreview: { truncated: false } });
+        }
+        if (url.includes("/api/analyze")) {
+          return jsonResponse({ report: unsafeReport });
+        }
+        return jsonResponse({});
+      }),
+    );
+
+    render(<HomePage />);
+    await userEvent.type(screen.getByLabelText("GitHub 链接"), "https://github.com/octo/repo/pull/42");
+    await userEvent.click(screen.getByRole("button", { name: "加载" }));
+    await userEvent.click(await screen.findByRole("button", { name: "开始分析" }));
+    await waitFor(() => expect(screen.getByText(/Safe text/)).toBeInTheDocument());
+    expect(document.querySelector("script")).toBeNull();
+    expect(document.querySelector("img[onerror]")).toBeNull();
   });
 });
 
@@ -1463,6 +1583,8 @@ git commit -m "feat: render reports and publish comments"
   - local install/run commands
   - GitHub token permissions for public and private repos
   - OpenAI-compatible config fields
+  - example model guidance: use a provider-supported fast/cost-effective model such as `gpt-4o-mini` when available
+  - fixed version-one context budget of `120000` characters
   - warning that public deployment is not recommended
   - statement that UI is Chinese and generated review is English
 - Run all tests, typecheck, lint, and build.
@@ -1574,7 +1696,11 @@ GitHub token permissions:
 LLM settings:
 - Base URL, for example `https://api.openai.com/v1`
 - API key
-- Model name
+- Model name. For OpenAI-compatible providers, start with a fast/cost-effective model such as `gpt-4o-mini` when your provider supports it, or enter any model name supported by your configured provider.
+
+## Context Budget
+
+Version one uses a fixed 120,000 character analysis context budget. Large PRs are truncated with visible per-file and report-level notices.
 
 ## Safety
 
@@ -1627,9 +1753,14 @@ git commit -m "test: add end-to-end pr review flow"
 - [ ] PR URL goes directly to PR-ready state.
 - [ ] Missing config blocks analysis with Chinese messages.
 - [ ] GitHub token and LLM API key never appear in logs, UI errors, or history.
+- [ ] API routes export `dynamic = "force-dynamic"` and return only redacted structured errors.
+- [ ] Settings/history components read localStorage and IndexedDB only after client mount.
 - [ ] Analysis report has six fixed dimensions plus overall score.
 - [ ] Every score is 0-10 and higher means more acceptable.
+- [ ] Overall score is model-generated but explained against the six sub-scores.
+- [ ] LLM client falls back when a provider rejects `response_format`.
 - [ ] Report body and review draft are English.
+- [ ] Markdown rendering skips or sanitizes raw HTML.
 - [ ] UI labels and workflow are Chinese.
 - [ ] User must confirm before publishing a single PR comment.
 - [ ] Failed publishing keeps the draft copyable.
@@ -1647,12 +1778,12 @@ Spec coverage:
 
 - Problem statement and user stories are covered by Tasks 9 through 12.
 - Functional modules are covered by Tasks 2 through 11.
-- Non-functional requirements are covered by schema validation, redaction, truncation, progress UI, and final verification.
+- Non-functional requirements are covered by schema validation, redaction, prioritized truncation, mounted-state storage access, Markdown HTML sanitization, progress UI, and final verification.
 - Architecture and data model are covered by Tasks 1 through 8.
 - API design is covered by Tasks 3, 4, and 8.
 - Technology choices are covered by Task 1 and README updates in Task 12.
 - Acceptance criteria are represented in the final checklist.
-- Risks are addressed by truncation, schema validation, redaction, explicit confirmation, and local-only README warnings.
+- Risks are addressed by prioritized truncation, schema validation, `response_format` fallback, redacted route errors, mounted-state storage reads, Markdown HTML sanitization, explicit confirmation, and local-only README warnings.
 
 Forbidden-marker scan:
 

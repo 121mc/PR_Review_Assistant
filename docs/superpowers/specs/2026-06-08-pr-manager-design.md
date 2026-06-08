@@ -47,7 +47,7 @@ The first version targets personal developers and students. It is worth building
 - Input: GitHub token, LLM base URL, LLM API key, LLM model.
 - Behavior: Store configuration in browser localStorage. Include the configuration in requests to local API routes when required.
 - Output: Configuration status showing whether required fields are present.
-- Boundary conditions: Do not write secrets to server disk, Git history, IndexedDB history records, logs, or error messages.
+- Boundary conditions: Do not write secrets to server disk, Git history, IndexedDB history records, logs, or error messages. Because Next.js App Router renders on the server by default, UI components must not read localStorage during server render or initial render. Storage reads must happen after client mount inside effects, with a stable loading or empty state to avoid hydration mismatch.
 - Error handling: Show field-specific messages for missing token, invalid base URL, missing model, invalid API key, model not found, and LLM connectivity failures.
 
 ### 3.2 Link Parsing and PR Selection
@@ -63,7 +63,7 @@ The first version targets personal developers and students. It is worth building
 - Input: `owner`, `repo`, `pullNumber`, and GitHub token.
 - Behavior: Fetch PR metadata, changed files, file patches, diff summaries, and language-specific repository context files. Fetch relevant changed-file content snippets when text content is available.
 - Output: A normalized `AnalysisContext`.
-- Boundary conditions: Skip binary files and oversized files. Enforce a total context size limit. Mark `truncated=true` when diff, file content, or repository context is shortened.
+- Boundary conditions: Skip binary files and oversized files. Enforce a fixed version-one context budget of `120000` characters. Do not concatenate all context and slice blindly. Allocate budget by priority: PR metadata and description must be preserved first; changed file summaries and diff headers are next; changed file patches receive a per-file soft limit such as `8000` characters; repository context files receive a smaller per-file limit such as `5000` characters; further files are skipped when the total budget is exhausted. Mark each shortened file with `truncated=true`, insert a local truncation note such as `[Patch truncated due to file-size limit]`, and mark the whole context as truncated when any truncation or skip occurs.
 - Error handling: Continue with partial context where safe, but surface missing permissions, GitHub pagination failures, and context-size truncation to the final report.
 
 Language-aware context files:
@@ -77,9 +77,9 @@ Language-aware context files:
 ### 3.4 LLM Analysis
 
 - Input: `AnalysisContext`, fixed rubric, English output instruction, LLM base URL, LLM API key, and model.
-- Behavior: Call an OpenAI-compatible Chat Completions API. Ask the model to return strict JSON matching the report schema. Retry once when JSON parsing or schema validation fails.
+- Behavior: Call an OpenAI-compatible Chat Completions API. Ask the model to return strict JSON matching the report schema, and include a complete example JSON object in the prompt. Try `response_format: { "type": "json_object" }` when supported, but fall back to ordinary chat completion if the provider rejects that parameter. Retry once when JSON parsing or schema validation fails.
 - Output: A validated `AnalysisReport`.
-- Boundary conditions: Scores must be numeric values from 0 to 10. Verdict must be `approve`, `request_changes`, or `comment`. Higher scores always mean the PR is more acceptable.
+- Boundary conditions: Scores must be numeric values from 0 to 10. Verdict must be `approve`, `request_changes`, or `comment`. Higher scores always mean the PR is more acceptable. The model generates `overallScore`, but the prompt must require logical alignment with the six sub-scores and allow severe issues to dominate the overall score when warranted.
 - Error handling: Return structured errors for timeout, invalid key, unknown model, unsupported API response shape, invalid JSON after retry, and schema validation failure.
 
 ### 3.5 Report Rendering
@@ -87,7 +87,7 @@ Language-aware context files:
 - Input: `AnalysisReport`.
 - Behavior: Render the app UI in Chinese while keeping report text and GitHub review comment in English. Display score overview, per-dimension detail, Markdown report, and review comment draft.
 - Output: Human-readable report, copyable Markdown, and publish-ready review draft.
-- Boundary conditions: Do not publish automatically. Show a truncation notice when context was truncated.
+- Boundary conditions: Do not publish automatically. Show a truncation notice when context was truncated. Markdown rendering must not execute or render raw HTML from LLM output, PR descriptions, diffs, or repository snippets; use `react-markdown` with HTML skipped or an explicit sanitization layer.
 - Error handling: If fields are missing or invalid, show a report validation error and prevent comment publishing.
 
 ### 3.6 Comment Publishing
@@ -103,7 +103,7 @@ Language-aware context files:
 - Input: PR metadata, analysis report, review comment draft, scores, verdict, timestamps, truncation status.
 - Behavior: Save complete analysis records to browser IndexedDB with no automatic retention limit. Allow viewing, deleting one record, and clearing all records.
 - Output: Local history list and detail view.
-- Boundary conditions: History is local to the current browser profile and does not sync across devices. Secrets must not be stored in history records.
+- Boundary conditions: History is local to the current browser profile and does not sync across devices. Secrets must not be stored in history records. Like configuration, IndexedDB access must happen only after client mount inside effects or client-only handlers to avoid server-render crashes and hydration mismatch.
 - Error handling: If IndexedDB writes fail because of browser quota or privacy settings, show a message recommending deletion, export, or browser setting changes.
 
 ## 4. Non-Functional Requirements
@@ -119,6 +119,7 @@ Language-aware context files:
 - GitHub token and LLM API key are stored only in browser localStorage for version one.
 - Local API routes receive secrets only for the current request and must not write them to disk.
 - Logs and error messages must redact tokens, API keys, authorization headers, and raw secret-bearing payloads.
+- Every API route must use standardized try/catch error handling that redacts secrets before returning errors to the browser.
 - Public and private repositories are supported when token permissions allow access.
 - Public deployment is not recommended for version one because browser-stored secrets are sent to the app server during API calls.
 
@@ -140,6 +141,7 @@ Language-aware context files:
 
 - LLM schema validation is required before rendering a report as complete.
 - Invalid JSON gets one automatic retry.
+- Providers that reject `response_format` must be retried without that parameter before surfacing a provider error.
 - Publishing comments requires explicit confirmation and disables duplicate in-flight submission.
 - Partial GitHub context collection is allowed only when the missing data is non-critical and clearly recorded.
 
@@ -315,7 +317,15 @@ flowchart LR
 
 ## 7. API Design
 
-All API routes use JSON requests and responses. Any request containing secrets must be handled only in memory.
+All API routes use JSON requests and responses. Any request containing secrets must be handled only in memory. All App Router API route files must export `dynamic = "force-dynamic"` to avoid accidental static optimization assumptions, even though POST routes are normally dynamic.
+
+All API routes share this reliability contract:
+
+- Validate required fields before calling GitHub or LLM providers.
+- Wrap route logic in try/catch.
+- Redact secrets from caught errors before returning JSON.
+- Return structured `ApiError` responses with stable `code`, `message`, and optional sanitized `details`.
+- Never echo GitHub tokens, LLM API keys, authorization headers, or raw secret-bearing request bodies.
 
 ### POST /api/github/parse-url
 
@@ -429,6 +439,7 @@ Success:
 - Open Design skill: `dashboard`.
 - Open Design rationale: Open Design documents `dashboard` as the admin/analytics style skill and lists `vercel` among developer-tool design systems. This project is a developer productivity dashboard for PR review, so the Vercel-style system fits the target audience: minimal, technical, focused, and suitable for dense metadata, score cards, progress states, and Markdown reports.
 - Storage: localStorage for configuration secrets, IndexedDB for complete local history, no backend database.
+- Test storage support: Vitest must load `fake-indexeddb/auto` in `vitest.setup.ts` so IndexedDB tests run in jsdom/Node.
 - External APIs: GitHub REST API and OpenAI-compatible Chat Completions API.
 - Deployment: Local Next.js execution for version one. Public deployment requires redesigned credential handling, authentication, and server-side secret isolation.
 
@@ -438,6 +449,7 @@ Success:
 
 - The app blocks analysis when required GitHub or LLM fields are missing.
 - The app saves configuration in localStorage and restores it after refresh.
+- Settings and history UI do not read localStorage or IndexedDB before client mount and do not produce hydration mismatch warnings.
 - Token and API key never appear in UI errors, console logs, history records, or server logs.
 
 ### Link Parsing and PR Selection
@@ -451,6 +463,7 @@ Success:
 
 - The app collects PR metadata, changed files, patches, and language-aware repository context.
 - Binary and oversized files are skipped or truncated safely.
+- Context truncation preserves PR metadata first, applies per-file limits, and records per-file truncation notes.
 - Truncation is visible in the analysis result.
 
 ### Analysis
@@ -458,13 +471,16 @@ Success:
 - A medium or small PR can generate an English report within 60 seconds under normal API conditions.
 - The report includes all six fixed dimensions and an overall score.
 - Every score is between 0 and 10.
+- The model-generated overall score is schema-valid and logically explained in relation to the six sub-scores.
 - The report includes a verdict of `approve`, `request_changes`, or `comment`.
+- LLM providers that reject JSON `response_format` still work through fallback completion.
 - Invalid LLM JSON triggers one retry before a user-facing error.
 
 ### Report UI
 
 - The UI is Chinese.
 - The report body and GitHub comment draft are English.
+- Raw HTML from Markdown content is skipped or sanitized before rendering.
 - Users can copy the review comment draft.
 - Users cannot publish if the report failed schema validation.
 
@@ -486,16 +502,20 @@ Success:
 
 - Unit tests cover GitHub URL parsing.
 - Unit tests cover report schema validation.
+- Unit tests cover prioritized context truncation and per-file truncation markers.
 - Mock tests cover GitHub pagination, permission errors, and comment publishing.
-- Mock tests cover LLM success, invalid JSON retry, and API errors.
+- Mock tests cover LLM success, invalid JSON retry, `response_format` fallback, and API errors.
+- Component tests cover mounted-state storage loading without server-render storage access.
 - At least one happy-path integration test covers repository URL, PR selection, analysis, report rendering, and local history save using mocked APIs.
 
-## 10. Risks and Open Questions
+## 10. Risks and Resolved Decisions
 
 ### Risks
 
-- GitHub diffs and file contents can exceed model context limits. Mitigation: enforce context budgets, truncate deterministically, and disclose truncation.
-- OpenAI-compatible providers vary in response format and JSON reliability. Mitigation: keep the LLM client tolerant at the transport layer but strict at report schema validation.
+- GitHub diffs and file contents can exceed model context limits. Mitigation: enforce prioritized context budgets, per-file limits, deterministic truncation markers, and visible truncation disclosure.
+- Next.js server rendering can crash or hydrate incorrectly if browser storage is read too early. Mitigation: storage-backed components render a stable mounted state first and read localStorage or IndexedDB only in effects or client-only handlers.
+- OpenAI-compatible providers vary in response format and JSON reliability. Mitigation: keep the LLM client tolerant at the transport layer, fall back when `response_format` is rejected, and stay strict at report schema validation.
+- Markdown generated from PR content can contain hostile HTML. Mitigation: skip raw HTML rendering or sanitize Markdown output before display.
 - LLM output can overstate uncertain findings. Mitigation: prompt the model to distinguish evidence-backed findings from speculation and show evidence arrays for every score.
 - Private repository permission errors may look like 404 responses. Mitigation: map GitHub status codes and token state into clearer messages where possible.
 - IndexedDB quota varies by browser and user settings. Mitigation: no automatic retention limit, but provide delete and clear-all controls plus quota failure guidance.
@@ -505,12 +525,12 @@ Success:
 - Chinese UI and English report fields can become inconsistent. Mitigation: keep stable internal English field names and explicit Chinese display labels.
 - An implementation agent may overbuild enterprise features. Mitigation: version one explicitly excludes accounts, OAuth, GitHub Apps, server-side database, line-level comments, and multi-user collaboration.
 
-### Open Questions
+### Resolved Implementation Decisions
 
-- Which exact OpenAI-compatible model should be recommended in the README examples?
-- Should history export/import be included in version one or deferred?
-- Should the context size budget be configured by the user or fixed in code for version one?
-- Should the overall score be model-generated or calculated from the six dimension scores after the first implementation pass?
+- README examples should recommend a fast, cost-effective OpenAI-compatible model such as `gpt-4o-mini` when supported by the user's provider, while making clear that users can enter any provider-supported model name.
+- History export/import is deferred beyond version one.
+- The context size budget is fixed in code for version one at `120000` characters. Advanced user overrides can be considered later but are out of scope for this implementation.
+- The overall score is model-generated, schema-validated, and required to be logically explained against the six sub-scores.
 
 ## Out of Scope for Version One
 
