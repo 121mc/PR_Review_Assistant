@@ -80,6 +80,28 @@ export async function analyzePullRequestWithApi(input: {
   return parseAnalysisReport(body.report);
 }
 
+export async function publishReviewCommentWithApi(input: {
+  body: string;
+  githubToken: string;
+  owner: string;
+  pullNumber: number;
+  repo: string;
+}): Promise<{ commentUrl: string }> {
+  const body = await postJson("/api/github/comment", {
+    body: input.body,
+    githubToken: input.githubToken,
+    owner: input.owner,
+    pullNumber: input.pullNumber,
+    repo: input.repo,
+  });
+
+  if (!isRecord(body) || !isString(body.commentUrl)) {
+    throw new ClientApiError("评论发布响应无效", "GITHUB_RESPONSE_INVALID");
+  }
+
+  return { commentUrl: body.commentUrl };
+}
+
 async function postJson(endpoint: string, body: Record<string, unknown>): Promise<unknown> {
   const response = await fetch(endpoint, {
     method: "POST",
