@@ -44,8 +44,9 @@ export function LinkInput() {
               setLink(event.target.value);
               setStatus(null);
             }}
+            inputMode="url"
             placeholder="https://github.com/owner/repo"
-            type="url"
+            type="text"
             value={link}
           />
         </label>

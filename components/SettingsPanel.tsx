@@ -11,6 +11,11 @@ import {
 import { cn } from "../lib/ui";
 import { StatusMessage } from "./StatusMessage";
 
+type SettingsStatus = {
+  message: string;
+  tone: "success" | "error";
+};
+
 const emptyConfig: AppConfig = {
   githubToken: "",
   llmBaseUrl: "",
@@ -23,14 +28,21 @@ export function SettingsPanel() {
   const [expanded, setExpanded] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<SettingsStatus | null>(null);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
-      const saved = loadAppConfig();
-      if (saved) {
-        setConfig(saved);
+      let saved: AppConfig | undefined;
+
+      try {
+        saved = loadAppConfig();
+        if (saved) {
+          setConfig(saved);
+        }
+      } catch {
+        setStatus({ message: "配置加载失败", tone: "error" });
       }
+
       setExpanded((current) => !hasCompleteConfig(saved) || current);
       setMounted(true);
       setLoaded(true);
@@ -48,9 +60,15 @@ export function SettingsPanel() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveAppConfig(config);
-    setExpanded(!hasCompleteConfig(config) || expanded);
-    setStatus("配置已保存");
+
+    try {
+      saveAppConfig(config);
+      setExpanded(!hasCompleteConfig(config) || expanded);
+      setStatus({ message: "配置已保存", tone: "success" });
+    } catch {
+      setExpanded(true);
+      setStatus({ message: "配置保存失败", tone: "error" });
+    }
   }
 
   return (
@@ -132,7 +150,7 @@ export function SettingsPanel() {
               <Save aria-hidden="true" className="h-4 w-4" />
               保存配置
             </button>
-            {status ? <StatusMessage tone="success">{status}</StatusMessage> : null}
+            {status ? <StatusMessage tone={status.tone}>{status.message}</StatusMessage> : null}
           </div>
         </form>
       ) : null}

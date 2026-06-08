@@ -1,6 +1,30 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const storageMocks = vi.hoisted(() => ({
+  clearHistoryRecords: vi.fn(),
+  deleteHistoryRecord: vi.fn(),
+  useClearHistoryRecordsMock: false,
+  useDeleteHistoryRecordMock: false,
+}));
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+
+  return {
+    ...actual,
+    clearHistoryRecords: (...args: Parameters<typeof actual.clearHistoryRecords>) =>
+      storageMocks.useClearHistoryRecordsMock
+        ? storageMocks.clearHistoryRecords(...args)
+        : actual.clearHistoryRecords(...args),
+    deleteHistoryRecord: (...args: Parameters<typeof actual.deleteHistoryRecord>) =>
+      storageMocks.useDeleteHistoryRecordMock
+        ? storageMocks.deleteHistoryRecord(...args)
+        : actual.deleteHistoryRecord(...args),
+  };
+});
+
 import HomePage from "../app/page";
 import {
   clearHistoryRecords,
@@ -13,6 +37,10 @@ import { validReport } from "./fixtures/report";
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  storageMocks.clearHistoryRecords.mockReset();
+  storageMocks.deleteHistoryRecord.mockReset();
+  storageMocks.useClearHistoryRecordsMock = false;
+  storageMocks.useDeleteHistoryRecordMock = false;
   localStorage.clear();
   await clearHistoryRecords();
 });
@@ -84,6 +112,36 @@ describe("dashboard shell", () => {
     await waitFor(() => expect(screen.getByDisplayValue("model-a")).toBeInTheDocument());
   });
 
+  it("shows a Chinese error when saved settings cannot be loaded", async () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    render(<HomePage />);
+
+    expect(getItemSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("配置加载失败"));
+    expect(screen.getByLabelText("GitHub Token")).toBeInTheDocument();
+  });
+
+  it("shows a Chinese error when settings cannot be saved", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub Token"), "ghp_test");
+    await user.type(screen.getByLabelText("LLM Base URL"), "https://llm.test/v1");
+    await user.type(screen.getByLabelText("LLM API Key"), "sk_test");
+    await user.type(screen.getByLabelText("模型"), "model-a");
+    await user.click(screen.getByRole("button", { name: "保存配置" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("配置保存失败");
+    expect(screen.getByDisplayValue("model-a")).toBeInTheDocument();
+  });
+
   it("expands the settings panel when config is incomplete", async () => {
     render(<HomePage />);
     await waitFor(() =>
@@ -105,6 +163,17 @@ describe("dashboard shell", () => {
     await user.type(input, "https://github.com/octo/repo/pull/42");
     await user.click(screen.getByRole("button", { name: "加载" }));
     expect(screen.getByRole("status")).toHaveTextContent("已识别 PR 链接");
+  });
+
+  it("shows the explicit Chinese link error for malformed input", async () => {
+    const user = userEvent.setup();
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub 链接"), "abc");
+    await user.click(screen.getByRole("button", { name: "加载" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("链接格式无效");
   });
 
   it("lists history records from IndexedDB", async () => {
@@ -157,10 +226,32 @@ describe("dashboard shell", () => {
     render(<HomePage />);
 
     await screen.findByText("Delete me");
-    await user.click(screen.getByRole("button", { name: "删除 Delete me" }));
+    await user.click(screen.getByRole("button", { name: "删除 octo/repo #42 Delete me" }));
 
     await waitFor(() => expect(screen.queryByText("Delete me")).not.toBeInTheDocument());
     expect(await listHistoryRecords()).toEqual([]);
+  });
+
+  it("shows a Chinese error when deleting a history record fails", async () => {
+    const user = userEvent.setup();
+    storageMocks.useDeleteHistoryRecordMock = true;
+    storageMocks.deleteHistoryRecord.mockRejectedValue(new Error("delete failed"));
+    await saveHistoryRecord(
+      historyRecord({
+        id: "record-delete-error",
+        pullRequest: { ...historyRecord().pullRequest, title: "Keep me" },
+        reviewDraft: { body: validReport.reviewComment, sourceReportId: "record-delete-error" },
+      }),
+    );
+
+    render(<HomePage />);
+
+    await screen.findByText("Keep me");
+    await user.click(screen.getByRole("button", { name: "删除 octo/repo #42 Keep me" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("历史记录删除失败");
+    expect(screen.getByText("Keep me")).toBeInTheDocument();
+    expect(await listHistoryRecords()).toHaveLength(1);
   });
 
   it("clears all history records", async () => {
@@ -182,5 +273,28 @@ describe("dashboard shell", () => {
     await waitFor(() => expect(screen.queryByText("Second PR")).not.toBeInTheDocument());
     expect(screen.getByText("暂无历史记录")).toBeInTheDocument();
     expect(await listHistoryRecords()).toEqual([]);
+  });
+
+  it("shows a Chinese error when clearing history records fails", async () => {
+    const user = userEvent.setup();
+    storageMocks.useClearHistoryRecordsMock = true;
+    storageMocks.clearHistoryRecords.mockRejectedValue(new Error("clear failed"));
+    await saveHistoryRecord(historyRecord({ id: "record-1" }));
+    await saveHistoryRecord(
+      historyRecord({
+        id: "record-2",
+        pullRequest: { ...historyRecord().pullRequest, title: "Still here" },
+        reviewDraft: { body: validReport.reviewComment, sourceReportId: "record-2" },
+      }),
+    );
+
+    render(<HomePage />);
+
+    await screen.findByText("Still here");
+    await user.click(screen.getByRole("button", { name: "清空历史" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("历史记录清空失败");
+    expect(screen.getByText("Still here")).toBeInTheDocument();
+    expect(await listHistoryRecords()).toHaveLength(2);
   });
 });

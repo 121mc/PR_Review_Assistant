@@ -1,7 +1,7 @@
 "use client";
 
 import { History, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   clearHistoryRecords,
   deleteHistoryRecord,
@@ -14,9 +14,11 @@ export function HistoryPanel() {
   const [loaded, setLoaded] = useState(false);
   const [records, setRecords] = useState<HistoryRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const activeRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    activeRef.current = true;
 
     async function loadRecords() {
       try {
@@ -42,17 +44,38 @@ export function HistoryPanel() {
 
     return () => {
       cancelled = true;
+      activeRef.current = false;
     };
   }, []);
 
   async function handleDelete(record: HistoryRecord) {
-    await deleteHistoryRecord(record.id);
-    setRecords((current) => current.filter((item) => item.id !== record.id));
+    setError(null);
+
+    try {
+      await deleteHistoryRecord(record.id);
+      if (activeRef.current) {
+        setRecords((current) => current.filter((item) => item.id !== record.id));
+      }
+    } catch {
+      if (activeRef.current) {
+        setError("历史记录删除失败");
+      }
+    }
   }
 
   async function handleClear() {
-    await clearHistoryRecords();
-    setRecords([]);
+    setError(null);
+
+    try {
+      await clearHistoryRecords();
+      if (activeRef.current) {
+        setRecords([]);
+      }
+    } catch {
+      if (activeRef.current) {
+        setError("历史记录清空失败");
+      }
+    }
   }
 
   return (
@@ -80,11 +103,15 @@ export function HistoryPanel() {
 
       <div className="px-5 py-4">
         {!loaded ? <p className="text-sm text-neutral-500">加载中</p> : null}
-        {loaded && error ? <p className="text-sm text-red-700">{error}</p> : null}
-        {loaded && !error && records.length === 0 ? (
+        {loaded && error ? (
+          <p aria-live="polite" className="text-sm text-red-700" role="status">
+            {error}
+          </p>
+        ) : null}
+        {loaded && records.length === 0 ? (
           <p className="text-sm text-neutral-500">暂无历史记录</p>
         ) : null}
-        {loaded && !error && records.length > 0 ? (
+        {loaded && records.length > 0 ? (
           <ul aria-label="历史记录" className="divide-y divide-neutral-100" role="list">
             {records.map((record) => (
               <li className="flex items-start justify-between gap-4 py-3" key={record.id}>
@@ -96,7 +123,7 @@ export function HistoryPanel() {
                   <p className="mt-1 text-xs text-neutral-500">{formatCreatedAt(record.createdAt)}</p>
                 </div>
                 <button
-                  aria-label={`删除 ${record.pullRequest.title}`}
+                  aria-label={`删除 ${record.repository.owner}/${record.repository.repo} #${record.pullRequest.number} ${record.pullRequest.title}`}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-500 transition hover:border-red-300 hover:text-red-700"
                   onClick={() => void handleDelete(record)}
                   type="button"
