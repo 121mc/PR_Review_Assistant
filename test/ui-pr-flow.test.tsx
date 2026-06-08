@@ -115,7 +115,7 @@ describe("PR selection and analysis flow", () => {
     await user.click(screen.getByRole("button", { name: "加载" }));
 
     expect(await screen.findByRole("heading", { name: "PR 摘要" })).toBeInTheDocument();
-    expect(screen.getByText("#42 Fix bug")).toBeInTheDocument();
+    expect(screen.getAllByText("#42 Fix bug").length).toBeGreaterThan(0);
     expect(screen.getByText("alice")).toBeInTheDocument();
     expect(screen.getByText("1 个文件")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -186,6 +186,67 @@ describe("PR selection and analysis flow", () => {
         report: validReport,
       },
     ]);
+  });
+
+  it("recovers an analysis error when config is updated and keeps the selected PR ready", async () => {
+    const user = userEvent.setup();
+    saveAppConfig(completeConfig);
+    stubFetch(async (endpoint) => {
+      if (endpoint === "/api/github/parse-url") {
+        return jsonResponse({ type: "repo", owner: "octo", repo: "repo" });
+      }
+
+      if (endpoint === "/api/github/pulls") {
+        return jsonResponse({ pulls: [pr42] });
+      }
+
+      if (endpoint === "/api/analyze") {
+        return jsonResponse({ code: "LLM_FAILED", message: "LLM failed" }, 500);
+      }
+
+      return missingEndpoint(endpoint);
+    });
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub 链接"), "https://github.com/octo/repo");
+    await user.click(screen.getByRole("button", { name: "加载" }));
+    await user.click(await screen.findByRole("button", { name: "选择 #42 Fix bug" }));
+
+    const analyzeButton = screen.getByRole("button", { name: "开始分析" });
+    await waitFor(() => expect(analyzeButton).toBeEnabled());
+    await user.click(analyzeButton);
+
+    expect(await screen.findByText("LLM failed")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("模型"), "-retry");
+
+    expect(screen.queryByText("LLM failed")).not.toBeInTheDocument();
+    expect(screen.getAllByText("#42 Fix bug").length).toBeGreaterThan(0);
+    expect(screen.getByText("octo/repo #42")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始分析" })).toBeEnabled();
+  });
+
+  it("shows an error when API URL parsing rejects instead of falling back to local success", async () => {
+    const user = userEvent.setup();
+    saveAppConfig(completeConfig);
+    stubFetch(async (endpoint) => {
+      if (endpoint === "/api/github/parse-url") {
+        throw new Error("parse service unavailable");
+      }
+
+      return missingEndpoint(endpoint);
+    });
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub 链接"), "https://github.com/octo/repo");
+    await user.click(screen.getByRole("button", { name: "加载" }));
+
+    expect(await screen.findByText("链接格式无效")).toBeInTheDocument();
+    expect(screen.getByText("链接解析失败")).toBeInTheDocument();
+    expect(screen.queryByText("已识别仓库链接")).not.toBeInTheDocument();
+    expect(screen.queryByText("#42 Fix bug")).not.toBeInTheDocument();
   });
 
   it("filters the pull request list by title and number", async () => {

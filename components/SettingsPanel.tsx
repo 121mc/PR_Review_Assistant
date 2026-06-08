@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Save } from "lucide-react";
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import {
   type AppConfig,
   hasCompleteConfig,
@@ -33,6 +33,11 @@ export function SettingsPanel({ onConfigChange }: SettingsPanelProps = {}) {
   const [loaded, setLoaded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [status, setStatus] = useState<SettingsStatus | null>(null);
+  const onConfigChangeRef = useRef(onConfigChange);
+
+  useEffect(() => {
+    onConfigChangeRef.current = onConfigChange;
+  }, [onConfigChange]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -42,13 +47,13 @@ export function SettingsPanel({ onConfigChange }: SettingsPanelProps = {}) {
         saved = loadAppConfig();
         if (saved) {
           setConfig(saved);
-          onConfigChange?.(saved);
+          onConfigChangeRef.current?.(saved);
         } else {
-          onConfigChange?.(emptyConfig);
+          onConfigChangeRef.current?.(emptyConfig);
         }
       } catch {
         setStatus({ message: "配置加载失败", tone: "error" });
-        onConfigChange?.(emptyConfig);
+        onConfigChangeRef.current?.(emptyConfig);
       }
 
       setExpanded((current) => !hasCompleteConfig(saved) || current);
@@ -57,7 +62,7 @@ export function SettingsPanel({ onConfigChange }: SettingsPanelProps = {}) {
     }, 0);
 
     return () => window.clearTimeout(loadTimer);
-  }, [onConfigChange]);
+  }, []);
 
   function updateField(field: keyof AppConfig) {
     return (event: ChangeEvent<HTMLInputElement>) => {

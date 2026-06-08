@@ -27,7 +27,7 @@ import type {
   PullRequestSummary as PullRequestSummaryData,
   RepositoryRef,
 } from "../lib/types";
-import { parseGitHubUrl, type ParsedGitHubUrl } from "../lib/url";
+import type { ParsedGitHubUrl } from "../lib/url";
 
 type FlowStatus = "idle" | "loading" | "repoLoaded" | "prReady" | "analyzing" | "done" | "error";
 type ErrorSource = "parse" | "github" | "analysis" | "storage";
@@ -59,9 +59,27 @@ export default function HomePage() {
   const configComplete = hasCompleteConfig(config);
   const canAnalyze = configComplete && selectedSummary !== null && flowStatus !== "analyzing";
 
-  const handleConfigChange = useCallback((nextConfig: AppConfig) => {
-    setConfig(nextConfig);
-  }, []);
+  const handleConfigChange = useCallback(
+    (nextConfig: AppConfig) => {
+      setConfig(nextConfig);
+
+      if (flowStatus !== "error") {
+        return;
+      }
+
+      setErrorMessage(null);
+      setErrorSource(null);
+
+      if (selectedPullRequest) {
+        setFlowStatus("prReady");
+      } else if (repository || pullRequests.length > 0) {
+        setFlowStatus("repoLoaded");
+      } else {
+        setFlowStatus("idle");
+      }
+    },
+    [flowStatus, pullRequests.length, repository, selectedPullRequest],
+  );
 
   async function handleLinkSubmit(rawUrl: string): Promise<LinkStatus> {
     setErrorMessage(null);
@@ -79,41 +97,32 @@ export default function HomePage() {
       return { tone: "error", message: "链接格式无效" };
     }
 
-    if (parsed.source === "localFallback") {
-      clearPullRequestFlow();
-      setFlowStatus("idle");
-      return {
-        tone: "success",
-        message: parsed.value.type === "pull" ? "已识别 PR 链接" : "已识别仓库链接",
-      };
-    }
-
     try {
-      if (parsed.value.type === "repo") {
-        const nextRepository = toRepositoryRef(parsed.value.owner, parsed.value.repo);
+      if (parsed.type === "repo") {
+        const nextRepository = toRepositoryRef(parsed.owner, parsed.repo);
         const pulls = await fetchOpenPullRequests(
-          parsed.value.owner,
-          parsed.value.repo,
+          parsed.owner,
+          parsed.repo,
           config.githubToken,
         );
         setRepository(nextRepository);
         setPullRequests(pulls);
         setSelectedPullRequest(null);
         setFlowStatus("repoLoaded");
-        return { tone: "success", message: "已加载开放 PR" };
+        return { tone: "success", message: "已识别仓库链接" };
       }
 
       const pullRequest = await fetchPullRequestDetail(
-        parsed.value.owner,
-        parsed.value.repo,
-        parsed.value.pullNumber,
+        parsed.owner,
+        parsed.repo,
+        parsed.pullNumber,
         config.githubToken,
       );
-      setRepository(toRepositoryRef(parsed.value.owner, parsed.value.repo));
+      setRepository(toRepositoryRef(parsed.owner, parsed.repo));
       setPullRequests([]);
       setSelectedPullRequest(pullRequest);
       setFlowStatus("prReady");
-      return { tone: "success", message: "已加载 PR 摘要" };
+      return { tone: "success", message: "已识别 PR 链接" };
     } catch (error) {
       setFlowStatus("error");
       setErrorSource("github");
@@ -264,19 +273,11 @@ export default function HomePage() {
 
 async function parseUrlForFlow(
   rawUrl: string,
-): Promise<{ source: "api" | "localFallback"; value: ParsedGitHubUrl } | null> {
+): Promise<ParsedGitHubUrl | null> {
   try {
-    return { source: "api", value: await parseGitHubUrlWithApi(rawUrl) };
-  } catch (error) {
-    if (error instanceof ClientApiError) {
-      return null;
-    }
-
-    try {
-      return { source: "localFallback", value: parseGitHubUrl(rawUrl) };
-    } catch {
-      return null;
-    }
+    return await parseGitHubUrlWithApi(rawUrl);
+  } catch {
+    return null;
   }
 }
 
