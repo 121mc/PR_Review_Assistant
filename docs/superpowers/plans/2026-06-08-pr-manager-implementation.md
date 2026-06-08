@@ -269,6 +269,11 @@ describe("parseAnalysisReport", () => {
       }),
     ).toThrow(/verdict/i);
   });
+
+  it("requires an overall rationale for the model-generated overall score", () => {
+    const { overallRationale, ...reportWithoutRationale } = validReport;
+    expect(() => parseAnalysisReport(reportWithoutRationale)).toThrow(/overallRationale/i);
+  });
 });
 ```
 
@@ -335,6 +340,7 @@ export const validReport: AnalysisReport = {
     maintainability: item,
   },
   overallScore: 8,
+  overallRationale: "The PR is acceptable because the implementation is focused and the remaining concerns are minor.",
   verdict: "comment",
   reviewComment: "## Review\n\nLooks good with minor suggestions.",
   usedTruncatedContext: false,
@@ -525,6 +531,9 @@ git commit -m "feat: parse github links"
 - Fetch changed files with pagination.
 - Publish comments through `POST /repos/{owner}/{repo}/issues/{pull_number}/comments`.
 - Map 401 to `GITHUB_UNAUTHORIZED`, 403 to `GITHUB_FORBIDDEN` or `GITHUB_RATE_LIMITED`, 404 to `GITHUB_REPO_NOT_FOUND` or `GITHUB_PR_NOT_FOUND` depending on operation.
+- Document token expectations in route comments or README-facing errors: public repositories need readable contents/PRs plus issue comment write permission for publishing; private repositories need equivalent access to the target repository. Classic tokens are `public_repo` for public-only use and `repo` for private repository use.
+- `/api/github/pull-detail` returns only `{ pullRequest }`; it must not return `changedFiles`, `contextPreview`, repository context, or truncation metadata.
+- Duplicate comment protection is frontend-only in version one; the backend comment route validates one request and forwards it to GitHub without persistent idempotency storage.
 - Do not log tokens.
 - Every GitHub API route exports `dynamic = "force-dynamic"`.
 - Every GitHub API route wraps logic in try/catch and returns only secret-redacted structured errors.
@@ -578,6 +587,90 @@ describe("GitHubClient", () => {
     expect(result.commentUrl).toContain("issuecomment-1");
   });
 });
+```
+
+Create `test/api-github-routes.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from "vitest";
+import { POST as listPulls } from "../app/api/github/pulls/route";
+import { POST as pullDetail } from "../app/api/github/pull-detail/route";
+import { POST as publishComment } from "../app/api/github/comment/route";
+
+vi.mock("../lib/github", () => ({
+  GitHubClient: vi.fn().mockImplementation(() => ({
+    listOpenPulls: vi.fn(async () => [
+      {
+        owner: "octo",
+        repo: "repo",
+        number: 42,
+        title: "Fix bug",
+        author: "alice",
+        state: "open",
+        baseRef: "main",
+        headRef: "fix",
+        updatedAt: "2026-06-08T00:00:00Z",
+        url: "https://github.com/octo/repo/pull/42",
+      },
+    ]),
+    getPullDetail: vi.fn(async () => ({
+      summary: {
+        owner: "octo",
+        repo: "repo",
+        number: 42,
+        title: "Fix bug",
+        author: "alice",
+        state: "open",
+        baseRef: "main",
+        headRef: "fix",
+        updatedAt: "2026-06-08T00:00:00Z",
+        url: "https://github.com/octo/repo/pull/42",
+      },
+      body: "Fixes a bug",
+      additions: 3,
+      deletions: 1,
+      changedFiles: 1,
+      draft: false,
+    })),
+    createPullComment: vi.fn(async () => ({
+      commentUrl: "https://github.com/octo/repo/pull/42#issuecomment-1",
+    })),
+  })),
+}));
+
+describe("GitHub API routes", () => {
+  it("lists open pull requests", async () => {
+    const response = await listPulls(jsonRequest({ owner: "octo", repo: "repo", githubToken: "ghp_test" }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ pulls: [{ number: 42, title: "Fix bug" }] });
+  });
+
+  it("returns only pullRequest from pull-detail", async () => {
+    const response = await pullDetail(
+      jsonRequest({ owner: "octo", repo: "repo", pullNumber: 42, githubToken: "ghp_test" }),
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toHaveProperty("pullRequest");
+    expect(body).not.toHaveProperty("changedFiles");
+    expect(body).not.toHaveProperty("contextPreview");
+  });
+
+  it("rejects empty comment bodies", async () => {
+    const response = await publishComment(
+      jsonRequest({ owner: "octo", repo: "repo", pullNumber: 42, githubToken: "ghp_test", body: "" }),
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ code: "COMMENT_BODY_EMPTY" });
+  });
+});
+
+function jsonRequest(body: unknown) {
+  return new Request("http://localhost/api", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -733,9 +826,55 @@ describe("analyzeWithLlm", () => {
     expect(calls).toBe(2);
   });
 });
-```
 
-Add a local `minimalAnalysisContext()` helper in the same test returning a valid `AnalysisContext` with one changed file and no secrets.
+function minimalAnalysisContext() {
+  return {
+    repository: { owner: "octo", repo: "repo", url: "https://github.com/octo/repo" },
+    pullRequest: {
+      summary: {
+        owner: "octo",
+        repo: "repo",
+        number: 42,
+        title: "Fix bug",
+        author: "alice",
+        state: "open",
+        baseRef: "main",
+        headRef: "fix",
+        updatedAt: "2026-06-08T00:00:00Z",
+        url: "https://github.com/octo/repo/pull/42",
+      },
+      body: "Fixes a bug",
+      additions: 3,
+      deletions: 1,
+      changedFiles: 1,
+      draft: false,
+    },
+    changedFiles: [
+      {
+        filename: "src/feature.ts",
+        status: "modified",
+        additions: 3,
+        deletions: 1,
+        changes: 4,
+        patch: "@@ -1 +1\n-old\n+new",
+        isBinary: false,
+        truncated: false,
+      },
+    ],
+    contextFiles: [
+      {
+        path: "package.json",
+        kind: "package",
+        content: "{\"scripts\":{\"test\":\"vitest\"}}",
+        truncated: false,
+      },
+    ],
+    detectedLanguages: ["TypeScript"],
+    truncated: false,
+    truncationNotes: [],
+  };
+}
+```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -796,6 +935,8 @@ git commit -m "feat: add llm analysis client"
 **Expected implementation points:**
 
 - Detect candidate languages from changed file extensions and repository file names.
+- Use canonical language labels exactly as specified in the spec: `TypeScript`, `JavaScript`, `Python`, `Java`, `Go`, `Other`.
+- Map repository context file `kind` exactly as specified in the spec's "Language and Context Mapping" section.
 - Candidate context paths:
   - JS/TS: `package.json`, `tsconfig.json`, `.eslintrc`, `.eslintrc.json`, `eslint.config.js`, `.prettierrc`, `prettier.config.js`, `jest.config.js`, `vitest.config.ts`, `next.config.ts`.
   - Python: `pyproject.toml`, `requirements.txt`, `setup.cfg`, `ruff.toml`, `mypy.ini`, `pytest.ini`.
@@ -875,7 +1016,57 @@ describe("collectAnalysisContext", () => {
 });
 ```
 
-Add `fakeGitHubClient` in the test with mocked `getPullDetail`, `listChangedFiles`, and `getFileContent` methods.
+Add this complete `fakeGitHubClient` helper in the same test. The method names must match Task 4's `GitHubClient` API exactly:
+
+```ts
+function fakeGitHubClient(input: {
+  changedFiles: Array<{
+    filename: string;
+    patch?: string;
+    isBinary: boolean;
+    status?: string;
+    additions?: number;
+    deletions?: number;
+    changes?: number;
+  }>;
+  files: Record<string, string>;
+}) {
+  return {
+    getPullDetail: vi.fn(async () => ({
+      summary: {
+        owner: "octo",
+        repo: "repo",
+        number: 42,
+        title: "Fix bug",
+        author: "alice",
+        state: "open",
+        baseRef: "main",
+        headRef: "fix",
+        updatedAt: "2026-06-08T00:00:00Z",
+        url: "https://github.com/octo/repo/pull/42",
+      },
+      body: "Fixes a bug",
+      additions: 3,
+      deletions: 1,
+      changedFiles: input.changedFiles.length,
+      draft: false,
+    })),
+    listChangedFiles: vi.fn(async () =>
+      input.changedFiles.map((file) => ({
+        filename: file.filename,
+        status: file.status ?? "modified",
+        additions: file.additions ?? 1,
+        deletions: file.deletions ?? 0,
+        changes: file.changes ?? 1,
+        patch: file.patch,
+        isBinary: file.isBinary,
+        truncated: false,
+      })),
+    ),
+    getFileContent: vi.fn(async (_owner: string, _repo: string, path: string) => input.files[path] ?? null),
+  };
+}
+```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1040,7 +1231,8 @@ git commit -m "feat: add local config and history storage"
 - Validate required fields: `owner`, `repo`, `pullNumber`, `githubToken`, `llm.baseUrl`, `llm.apiKey`, `llm.model`.
 - Instantiate `GitHubClient`.
 - Call `collectAnalysisContext`.
-- Call `analyzeWithLlm`.
+- Call `analyzeWithLlm` with the collected `AnalysisContext`.
+- Do not build the LLM prompt in the route. The route owns orchestration only; `lib/llm.ts` owns `AnalysisContext` to prompt/messages conversion, JSON example insertion, `response_format` fallback, and report schema parsing.
 - Return `{ report }`.
 - Return `CONFIG_MISSING` for missing fields.
 - Return structured errors without leaking secrets.
@@ -1194,7 +1386,7 @@ git commit -m "feat: orchestrate pull request analysis"
 Create `test/ui-settings-history.test.tsx`:
 
 ```tsx
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
@@ -1225,6 +1417,20 @@ describe("dashboard shell", () => {
     const getItemSpy = vi.spyOn(Storage.prototype, "getItem");
     render(<HomePage />);
     expect(getItemSpy).not.toHaveBeenCalled();
+  });
+
+  it("loads saved config after client effects run", async () => {
+    localStorage.setItem(
+      "pr-manager-config",
+      JSON.stringify({
+        githubToken: "ghp_test",
+        llmBaseUrl: "https://llm.test/v1",
+        llmApiKey: "sk_test",
+        llmModel: "model-a",
+      }),
+    );
+    render(<HomePage />);
+    await waitFor(() => expect(screen.getByDisplayValue("model-a")).toBeInTheDocument());
   });
 });
 ```
@@ -1298,6 +1504,14 @@ git commit -m "feat: add local dashboard shell"
   - Disabled when config or PR target is missing.
   - Shows stages: fetching PR, collecting context, calling LLM, validating report, saving history.
   - Calls `/api/analyze`.
+- State transition rules:
+  - `idle` -> `repoLoaded` when a repository URL parses and `/api/github/pulls` succeeds.
+  - `idle` -> `prReady` when a PR URL parses and `/api/github/pull-detail` succeeds.
+  - `repoLoaded` -> `prReady` when the user selects a PR from the list.
+  - `prReady` -> `analyzing` when the user clicks `开始分析` with complete config.
+  - `analyzing` -> `done` when `/api/analyze` returns a schema-valid report and local history save completes.
+  - Any state -> `error` when a parse, GitHub, LLM, validation, or storage operation fails.
+  - `error` -> previous recoverable state when the user edits the URL, updates config, chooses another PR, or clicks retry. Keep the last valid PR selection when the error came from analysis or comment publishing; reset to `idle` when the error came from URL parsing.
 
 - [ ] **Step 1: Write failing PR flow tests**
 
@@ -1422,7 +1636,7 @@ git commit -m "feat: connect pull request selection flow"
 - Render English Markdown with `react-markdown`.
 - Do not render raw HTML from Markdown. Use `react-markdown` with HTML skipped, or add `rehype-sanitize` if later enabling HTML-like content.
 - Show a visible truncated-context notice when `usedTruncatedContext` is true.
-- Save a full `HistoryRecord` after successful analysis.
+- Save a full `HistoryRecord` only after `/api/analyze` returns a schema-valid report. Create `HistoryRecord.id` first, use that same value as `ReviewCommentDraft.sourceReportId`, then save the history record before moving UI state from `analyzing` to `done`. If history save fails, show a storage error and keep the generated report/draft in memory without marking it as persisted.
 - Publish button requires confirmation, disables during request, and calls `/api/github/comment`.
 - Failed publish keeps the draft visible and copyable.
 
@@ -1459,7 +1673,7 @@ describe("report and comment UI", () => {
           return jsonResponse({ type: "pull", owner: "octo", repo: "repo", pullNumber: 42 });
         }
         if (url.includes("/api/github/pull-detail")) {
-          return jsonResponse({ pullRequest: pullSummary(), changedFiles: [], contextPreview: { truncated: false } });
+          return jsonResponse({ pullRequest: pullSummary() });
         }
         if (url.includes("/api/analyze")) {
           return jsonResponse({ report: validReport });
@@ -1493,7 +1707,7 @@ describe("report and comment UI", () => {
           return jsonResponse({ type: "pull", owner: "octo", repo: "repo", pullNumber: 42 });
         }
         if (url.includes("/api/github/pull-detail")) {
-          return jsonResponse({ pullRequest: pullSummary(), changedFiles: [], contextPreview: { truncated: false } });
+          return jsonResponse({ pullRequest: pullSummary() });
         }
         if (url.includes("/api/analyze")) {
           return jsonResponse({ report: unsafeReport });
@@ -1546,7 +1760,7 @@ Add these components:
 - `ReportViewer`: Markdown report rendering from `reportToMarkdown(report)`.
 - `ReviewDraft`: textarea or Markdown preview with copy and publish buttons.
 
-On successful analysis, create a `HistoryRecord` with generated `crypto.randomUUID()` and call `saveHistoryRecord`.
+On successful analysis, create a `HistoryRecord` with generated `crypto.randomUUID()`, set `reviewDraft.sourceReportId` to that same history id, call `saveHistoryRecord`, and only then mark the UI as `done`.
 
 - [ ] **Step 4: Run report verification**
 
@@ -1625,7 +1839,7 @@ describe("happy path", () => {
         if (url.includes("/api/github/parse-url")) return jsonResponse({ type: "repo", owner: "octo", repo: "repo" });
         if (url.includes("/api/github/pulls")) return jsonResponse({ pulls: [pullSummary()] });
         if (url.includes("/api/github/pull-detail")) {
-          return jsonResponse({ pullRequest: pullSummary(), changedFiles: [], contextPreview: { truncated: false } });
+          return jsonResponse({ pullRequest: pullSummary() });
         }
         if (url.includes("/api/analyze")) return jsonResponse({ report: validReport });
         return jsonResponse({});
