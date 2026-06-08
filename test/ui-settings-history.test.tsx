@@ -37,6 +37,7 @@ import { validReport } from "./fixtures/report";
 
 beforeEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   storageMocks.clearHistoryRecords.mockReset();
   storageMocks.deleteHistoryRecord.mockReset();
   storageMocks.useClearHistoryRecordsMock = false;
@@ -47,6 +48,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 function historyRecord(overrides: Partial<HistoryRecord> = {}): HistoryRecord {
@@ -151,6 +153,41 @@ describe("dashboard shell", () => {
 
   it("accepts repository and pull request GitHub links", async () => {
     const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const endpoint = typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
+        const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+
+        if (endpoint === "/api/github/parse-url" && body.url === "https://github.com/octo/repo") {
+          return jsonResponse({ type: "repo", owner: "octo", repo: "repo" });
+        }
+
+        if (endpoint === "/api/github/parse-url" && body.url === "https://github.com/octo/repo/pull/42") {
+          return jsonResponse({ type: "pull", owner: "octo", repo: "repo", pullNumber: 42 });
+        }
+
+        if (endpoint === "/api/github/pulls") {
+          return jsonResponse({ pulls: [historyRecord().pullRequest] });
+        }
+
+        if (endpoint === "/api/github/pull-detail") {
+          return jsonResponse({
+            pullRequest: {
+              summary: historyRecord().pullRequest,
+              body: "Fixes a bug",
+              additions: 3,
+              deletions: 1,
+              changedFiles: 1,
+              mergeable: true,
+              draft: false,
+            },
+          });
+        }
+
+        return jsonResponse({ code: "UNHANDLED_TEST_ENDPOINT", message: endpoint }, 500);
+      }),
+    );
 
     render(<HomePage />);
 
@@ -298,3 +335,10 @@ describe("dashboard shell", () => {
     expect(await listHistoryRecords()).toHaveLength(2);
   });
 });
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}
