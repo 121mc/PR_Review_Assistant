@@ -331,6 +331,19 @@ AI 给出最近 10 条、最近 30 条、只保存摘要等选项。用户回答
 
 处理决策：`codex：gpt-5.5-high` 明确项目根目录应为 `D:\AI4SE_PROJECT`，`app/` 只是该根项目下的 Next.js App Router 目录，不应创建嵌套项目 `D:\AI4SE_PROJECT\app\package.json`。随后将该约定补入 implementation plan 的 `Project Root` 小节，作为后续 subagent 执行 Task 3、Task 6 以及其他任务时的统一路径基准。
 
+之后，`antigravity：claude-sonnet-4.6-thinking` 的 Task 3 与 Task 6 冷启动实现文件被全部删除。处理方式不是手工挑文件，而是由 `codex：gpt-5.5-high` 回滚该冷启动实现提交 `db45f9a feat: parse github links + collect pull request context (Task 3 & 6)`，并清理未跟踪的安装/构建产物，如 `node_modules/` 和 `tsconfig.tsbuildinfo`。这样仓库重新回到只保留 spec、plan 和过程记录的状态，避免把未经最终确认的实现混入后续任务。
+
+同一轮中，`antigravity：claude-sonnet-4.6-thinking` 还提出了更细的 spec/plan 问题。关键反馈包括：
+
+- `Spec §7 pull-detail` 的响应混入 `changedFiles` 和 `contextPreview`，与 Task 6 的 context collector 职责冲突。
+- `Spec §4 Security` 未定义 GitHub token 最小 scope，导致 401/403/404 错误映射难以测试。
+- `Plan Task 4` 要运行 `test/api-github-routes.test.ts`，但计划没有给出该测试文件内容。
+- `Plan Task 6` 的 fake GitHub client 没有完整骨架，且方法名需要和 Task 4 的 `GitHubClient` 对齐。
+- `Plan Task 9` 只测试初始 render 不读 storage，没有测试 effect 后配置确实加载。
+- 语言检测规范值、`RepositoryContextFile.kind` 映射、overall score 解释字段、重复发布保护边界、Task 5 的 `minimalAnalysisContext()`、Task 10 状态机、Task 11 history save 时机、Task 8 prompt 构造职责、缺失的 `lib/report-markdown.ts` / `lib/client-api.ts` / `lib/ui.ts`、以及 `ReviewCommentDraft.sourceReportId` 的指向都需要明确。
+
+处理决策：`codex：gpt-5.5-high` 将这些反馈分别沉淀到 spec 和 plan。Spec 侧明确了 `/api/github/pull-detail` 只返回 `{ pullRequest }`，上下文收集归 `/api/analyze` 的 context collector；补充了 GitHub token scope、canonical language labels、context file kind 映射、`overallRationale` 字段、前端-only 的重复发布保护、缺失的库文件和 `sourceReportId` 指向 `HistoryRecord.id`。Plan 侧补全了 `test/api-github-routes.test.ts`、完整 `fakeGitHubClient`、Task 5 的 `minimalAnalysisContext()`、Task 9 的 mounted 后加载测试、Task 10 状态转换规则、Task 11 history save 时机，以及 Task 8 中 route 只编排、`lib/llm.ts` 负责 prompt 转换的职责边界。
+
 ## 对 Superpowers brainstorming 的反思
 
 ### 做得好的地方
