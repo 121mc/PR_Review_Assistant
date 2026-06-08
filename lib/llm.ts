@@ -15,14 +15,6 @@ type ChatRequest = {
   response_format?: { type: "json_object" };
 };
 
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: unknown;
-    };
-  }>;
-};
-
 type CompletionResult = {
   content: string;
   supportsResponseFormat: boolean;
@@ -215,17 +207,35 @@ async function readResponsePayload(response: Response): Promise<unknown> {
 
 function extractContent(payload: unknown) {
   if (!isRecord(payload)) {
-    throw new Error("LLM response body was not an object.");
+    throw invalidResponseError("LLM response body was not a JSON object.", payload);
   }
 
-  const completion = payload as ChatCompletionResponse;
-  const content = completion.choices?.[0]?.message?.content;
+  const choices = payload.choices;
+  if (!Array.isArray(choices) || choices.length === 0) {
+    throw invalidResponseError("LLM response did not include choices[0].", payload);
+  }
+
+  const firstChoice = choices[0];
+  if (!isRecord(firstChoice) || !isRecord(firstChoice.message)) {
+    throw invalidResponseError("LLM response did not include choices[0].message.", payload);
+  }
+
+  const content = firstChoice.message.content;
 
   if (typeof content !== "string") {
-    throw new Error("LLM response did not include choices[0].message.content.");
+    throw invalidResponseError("LLM response did not include choices[0].message.content.", payload);
   }
 
   return content;
+}
+
+function invalidResponseError(reason: string, payload: unknown): ApiError {
+  return createApiError(
+    "LLM_RESPONSE_INVALID",
+    "LLM provider returned an invalid chat completion response.",
+    { reason, payload: redactSecrets(payload) },
+    502,
+  );
 }
 
 function mapHttpError(status: number, payload: unknown): ApiError {

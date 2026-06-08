@@ -75,6 +75,60 @@ describe("analyzeWithLlm", () => {
     expect(responseFormatValues).toEqual([{ type: "json_object" }, undefined]);
   });
 
+  it("retries invalid JSON after response_format fallback without re-enabling response_format", async () => {
+    let calls = 0;
+    const responseFormatValues: unknown[] = [];
+    server.use(
+      http.post("https://llm.test/v1/chat/completions", async ({ request }) => {
+        calls += 1;
+        const body = (await request.json()) as { response_format?: unknown };
+        responseFormatValues.push(body.response_format);
+
+        if (calls === 1) {
+          return HttpResponse.json({ error: { message: "Unknown parameter: response_format" } }, { status: 400 });
+        }
+
+        return HttpResponse.json({
+          choices: [{ message: { content: calls === 2 ? "not json" : JSON.stringify(validReport) } }],
+        });
+      }),
+    );
+
+    const report = await analyzeWithLlm({
+      llm,
+      context: minimalAnalysisContext(),
+    });
+
+    expect(report.overallScore).toBe(8);
+    expect(responseFormatValues).toEqual([{ type: "json_object" }, undefined, undefined]);
+  });
+
+  for (const invalidResponse of [
+    { name: "empty object", body: {} },
+    { name: "empty choices", body: { choices: [] } },
+    { name: "missing message", body: { choices: [{}] } },
+    { name: "missing content", body: { choices: [{ message: {} }] } },
+  ]) {
+    it(`throws a structured API error for provider response with ${invalidResponse.name}`, async () => {
+      server.use(
+        http.post("https://llm.test/v1/chat/completions", () => HttpResponse.json(invalidResponse.body)),
+      );
+
+      await expectInvalidProviderResponseError();
+    });
+  }
+
+  for (const invalidBody of [
+    { name: "empty response body", response: () => new HttpResponse(null, { status: 200 }) },
+    { name: "non-JSON response body", response: () => HttpResponse.text("provider returned text", { status: 200 }) },
+  ]) {
+    it(`throws a structured API error for ${invalidBody.name}`, async () => {
+      server.use(http.post("https://llm.test/v1/chat/completions", invalidBody.response));
+
+      await expectInvalidProviderResponseError();
+    });
+  }
+
   it("sends the rubric and JSON contract in the system prompt", async () => {
     let requestBody: ChatRequestBody | undefined;
     server.use(
@@ -205,4 +259,14 @@ function minimalAnalysisContext(): AnalysisContext {
     truncated: false,
     truncationNotes: [],
   };
+}
+
+async function expectInvalidProviderResponseError() {
+  try {
+    await analyzeWithLlm({ llm, context: minimalAnalysisContext() });
+    throw new Error("Expected analyzeWithLlm to reject");
+  } catch (error) {
+    expect(error).toMatchObject({ code: "LLM_RESPONSE_INVALID", status: 502 });
+    expect(JSON.stringify(error)).not.toContain(llm.apiKey);
+  }
 }
