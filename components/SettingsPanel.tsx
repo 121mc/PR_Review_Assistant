@@ -16,6 +16,10 @@ type SettingsStatus = {
   tone: "success" | "error";
 };
 
+interface SettingsPanelProps {
+  onConfigChange?: (config: AppConfig) => void;
+}
+
 const emptyConfig: AppConfig = {
   githubToken: "",
   llmBaseUrl: "",
@@ -23,7 +27,7 @@ const emptyConfig: AppConfig = {
   llmModel: "",
 };
 
-export function SettingsPanel() {
+export function SettingsPanel({ onConfigChange }: SettingsPanelProps = {}) {
   const [config, setConfig] = useState<AppConfig>(emptyConfig);
   const [expanded, setExpanded] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -38,9 +42,13 @@ export function SettingsPanel() {
         saved = loadAppConfig();
         if (saved) {
           setConfig(saved);
+          onConfigChange?.(saved);
+        } else {
+          onConfigChange?.(emptyConfig);
         }
       } catch {
         setStatus({ message: "配置加载失败", tone: "error" });
+        onConfigChange?.(emptyConfig);
       }
 
       setExpanded((current) => !hasCompleteConfig(saved) || current);
@@ -49,11 +57,14 @@ export function SettingsPanel() {
     }, 0);
 
     return () => window.clearTimeout(loadTimer);
-  }, []);
+  }, [onConfigChange]);
 
   function updateField(field: keyof AppConfig) {
     return (event: ChangeEvent<HTMLInputElement>) => {
-      setConfig((current) => ({ ...current, [field]: event.target.value }));
+      const value = event.target.value;
+      const next = { ...config, [field]: value };
+      setConfig(next);
+      onConfigChange?.(next);
       setStatus(null);
     };
   }
@@ -63,6 +74,7 @@ export function SettingsPanel() {
 
     try {
       saveAppConfig(config);
+      onConfigChange?.(config);
       setExpanded(!hasCompleteConfig(config) || expanded);
       setStatus({ message: "配置已保存", tone: "success" });
     } catch {

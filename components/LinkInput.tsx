@@ -9,19 +9,25 @@ type LinkStatus =
   | { tone: "success"; message: string }
   | { tone: "error"; message: string };
 
-export function LinkInput() {
+interface LinkInputProps {
+  busy?: boolean;
+  onChange?: () => void;
+  onSubmit?: (url: string) => LinkStatus | Promise<LinkStatus>;
+}
+
+export function LinkInput({ busy = false, onChange, onSubmit }: LinkInputProps = {}) {
   const [link, setLink] = useState("");
   const [status, setStatus] = useState<LinkStatus | null>(null);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (busy) {
+      return;
+    }
+
     try {
-      const parsed = parseGitHubUrl(link.trim());
-      setStatus({
-        tone: "success",
-        message: parsed.type === "pull" ? "已识别 PR 链接" : "已识别仓库链接",
-      });
+      setStatus(onSubmit ? await onSubmit(link.trim()) : parseLinkLocally(link.trim()));
     } catch {
       setStatus({ tone: "error", message: "链接格式无效" });
     }
@@ -43,6 +49,7 @@ export function LinkInput() {
             onChange={(event) => {
               setLink(event.target.value);
               setStatus(null);
+              onChange?.();
             }}
             inputMode="url"
             placeholder="https://github.com/owner/repo"
@@ -52,9 +59,10 @@ export function LinkInput() {
         </label>
         <button
           className="inline-flex h-10 items-center justify-center rounded-md bg-neutral-950 px-4 text-sm font-medium text-white transition hover:bg-neutral-800 md:self-end"
+          disabled={busy}
           type="submit"
         >
-          加载
+          {busy ? "加载中" : "加载"}
         </button>
       </form>
       {status ? (
@@ -64,4 +72,13 @@ export function LinkInput() {
       ) : null}
     </section>
   );
+}
+
+function parseLinkLocally(link: string): LinkStatus {
+  const parsed = parseGitHubUrl(link);
+
+  return {
+    tone: "success",
+    message: parsed.type === "pull" ? "已识别 PR 链接" : "已识别仓库链接",
+  };
 }
