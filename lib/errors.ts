@@ -37,7 +37,7 @@ export function jsonError(error: unknown, fallbackCode: string, fallbackStatus: 
     ...(apiError.details === undefined ? {} : { details: redactSecrets(apiError.details) as Record<string, unknown> }),
   };
 
-  return NextResponse.json({ error: bodyError }, { status: apiError.status ?? fallbackStatus });
+  return NextResponse.json(bodyError, { status: apiError.status ?? fallbackStatus });
 }
 
 function normalizeApiError(error: unknown, fallbackCode: string, fallbackStatus: number): ApiError {
@@ -102,12 +102,21 @@ function redactValue(value: unknown, seen: WeakSet<object>): unknown {
 }
 
 function redactString(value: string): string {
-  return TOKEN_PATTERNS.reduce((redacted, pattern) => redacted.replace(pattern, (match, prefix) => {
-    if (typeof prefix === "string" && match.toLowerCase().startsWith(prefix.toLowerCase())) {
-      return `${prefix}${REDACTED}`;
-    }
-    return REDACTED;
-  }), value);
+  const redactedJsonLikeFields = value.replace(
+    /(["'](?:authorization|api[-_]?key|token|secret|password)["']\s*:\s*)["'][^"']*["']/gi,
+    `$1"${REDACTED}"`,
+  );
+
+  return TOKEN_PATTERNS.reduce(
+    (redacted, pattern) =>
+      redacted.replace(pattern, (match, prefix) => {
+        if (typeof prefix === "string" && match.toLowerCase().startsWith(prefix.toLowerCase())) {
+          return `${prefix}${REDACTED}`;
+        }
+        return REDACTED;
+      }),
+    redactedJsonLikeFields,
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

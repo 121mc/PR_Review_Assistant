@@ -25,7 +25,13 @@ describe("api errors", () => {
     });
   });
 
-  it("builds redacted json api error responses", async () => {
+  it("redacts JSON-like strings with secret-bearing keys", () => {
+    expect(redactSecrets('{"authorization":"Bearer abc"}')).toBe('{"authorization":"[REDACTED]"}');
+    expect(redactSecrets('{"apiKey":"abc"}')).toBe('{"apiKey":"[REDACTED]"}');
+    expect(redactSecrets('{"token":"abc"}')).toBe('{"token":"[REDACTED]"}');
+  });
+
+  it("builds top-level redacted json api error responses", async () => {
     const response = jsonError(
       createApiError("LLM_UNAUTHORIZED", "Rejected", { apiKey: "sk-secret" }, 401),
       "FALLBACK",
@@ -33,11 +39,9 @@ describe("api errors", () => {
     );
 
     await expect(response.json()).resolves.toEqual({
-      error: {
-        code: "LLM_UNAUTHORIZED",
-        message: "Rejected",
-        details: { apiKey: "[REDACTED]" },
-      },
+      code: "LLM_UNAUTHORIZED",
+      message: "Rejected",
+      details: { apiKey: "[REDACTED]" },
     });
     expect(response.status).toBe(401);
   });
