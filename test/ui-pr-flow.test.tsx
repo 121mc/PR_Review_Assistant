@@ -1,6 +1,24 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const storageMocks = vi.hoisted(() => ({
+  saveHistoryRecord: vi.fn(),
+  useSaveHistoryRecordMock: false,
+}));
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+
+  return {
+    ...actual,
+    saveHistoryRecord: (...args: Parameters<typeof actual.saveHistoryRecord>) =>
+      storageMocks.useSaveHistoryRecordMock
+        ? storageMocks.saveHistoryRecord(...args)
+        : actual.saveHistoryRecord(...args),
+  };
+});
+
 import HomePage from "../app/page";
 import {
   clearHistoryRecords,
@@ -53,6 +71,8 @@ const pr42Detail: PullRequestDetail = {
 beforeEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  storageMocks.saveHistoryRecord.mockReset();
+  storageMocks.useSaveHistoryRecordMock = false;
   localStorage.clear();
   await clearHistoryRecords();
 });
@@ -186,6 +206,56 @@ describe("PR selection and analysis flow", () => {
         report: validReport,
       },
     ]);
+    const historyPanel = getHistoryPanel();
+    await waitFor(() => expect(within(historyPanel).getByText("Fix bug")).toBeInTheDocument());
+    expect(within(historyPanel).getByText("octo/repo #42")).toBeInTheDocument();
+  });
+
+  it("shows honest active analysis stages while analyzing and saving history", async () => {
+    const user = userEvent.setup();
+    saveAppConfig(completeConfig);
+    let resolveAnalyze: (response: Response) => void = () => {};
+    let resolveHistorySave: () => void = () => {};
+    const analyzeResponse = new Promise<Response>((resolve) => {
+      resolveAnalyze = resolve;
+    });
+    const historySave = new Promise<void>((resolve) => {
+      resolveHistorySave = resolve;
+    });
+    storageMocks.useSaveHistoryRecordMock = true;
+    storageMocks.saveHistoryRecord.mockReturnValue(historySave);
+    stubFetch(async (endpoint) => {
+      if (endpoint === "/api/github/parse-url") {
+        return jsonResponse({ type: "repo", owner: "octo", repo: "repo" });
+      }
+
+      if (endpoint === "/api/github/pulls") {
+        return jsonResponse({ pulls: [pr42] });
+      }
+
+      if (endpoint === "/api/analyze") {
+        return analyzeResponse;
+      }
+
+      return missingEndpoint(endpoint);
+    });
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub 链接"), "https://github.com/octo/repo");
+    await user.click(screen.getByRole("button", { name: "加载" }));
+    await user.click(await screen.findByRole("button", { name: "选择 #42 Fix bug" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "开始分析" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "开始分析" }));
+
+    await waitFor(() => expectStageToBeCurrent("调用 LLM"));
+
+    resolveAnalyze(jsonResponse({ report: validReport }));
+    await waitFor(() => expectStageToBeCurrent("保存历史"));
+    expect(storageMocks.saveHistoryRecord).toHaveBeenCalledTimes(1);
+
+    resolveHistorySave();
+    expect(await screen.findByText("分析完成")).toBeInTheDocument();
   });
 
   it("recovers an analysis error when config is updated and keeps the selected PR ready", async () => {
@@ -247,6 +317,30 @@ describe("PR selection and analysis flow", () => {
     expect(screen.getByText("链接解析失败")).toBeInTheDocument();
     expect(screen.queryByText("已识别仓库链接")).not.toBeInTheDocument();
     expect(screen.queryByText("#42 Fix bug")).not.toBeInTheDocument();
+  });
+
+  it("rejects pull list responses with invalid PR numbers", async () => {
+    const user = userEvent.setup();
+    saveAppConfig(completeConfig);
+    stubFetch(async (endpoint) => {
+      if (endpoint === "/api/github/parse-url") {
+        return jsonResponse({ type: "repo", owner: "octo", repo: "repo" });
+      }
+
+      if (endpoint === "/api/github/pulls") {
+        return jsonResponse({ pulls: [{ ...pr42, number: 0 }] });
+      }
+
+      return missingEndpoint(endpoint);
+    });
+
+    render(<HomePage />);
+
+    await user.type(screen.getByLabelText("GitHub 链接"), "https://github.com/octo/repo");
+    await user.click(screen.getByRole("button", { name: "加载" }));
+
+    expect(await screen.findByText("GitHub 加载失败")).toBeInTheDocument();
+    expect(screen.queryByText("#0 Fix bug")).not.toBeInTheDocument();
   });
 
   it("filters the pull request list by title and number", async () => {
@@ -345,4 +439,19 @@ function jsonResponse(body: unknown, status = 200) {
 
 function missingEndpoint(endpoint: string): Response {
   return jsonResponse({ code: "UNHANDLED_TEST_ENDPOINT", message: endpoint }, 500);
+}
+
+function getHistoryPanel(): HTMLElement {
+  const heading = screen.getByRole("heading", { name: "历史" });
+  const panel = heading.closest("section");
+  if (!panel) {
+    throw new Error("History panel was not found");
+  }
+
+  return panel;
+}
+
+function expectStageToBeCurrent(label: string): void {
+  const stage = screen.getByText(label).closest("li");
+  expect(stage).toHaveAttribute("aria-current", "step");
 }

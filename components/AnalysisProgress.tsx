@@ -44,6 +44,7 @@ export function AnalysisProgress({ currentStage, done = false }: AnalysisProgres
 
           return (
             <li
+              aria-current={active ? "step" : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-md border px-3 py-2 text-sm",
                 active && "border-neutral-950 bg-neutral-950 text-white",

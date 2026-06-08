@@ -54,6 +54,7 @@ export default function HomePage() {
   const [errorSource, setErrorSource] = useState<ErrorSource | null>(null);
   const [analysisStage, setAnalysisStage] = useState<AnalysisStage | undefined>();
   const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const selectedSummary = selectedPullRequest ? getPullRequestSummary(selectedPullRequest) : null;
   const configComplete = hasCompleteConfig(config);
@@ -177,21 +178,19 @@ export default function HomePage() {
     setErrorMessage(null);
     setErrorSource(null);
     setReport(null);
-    setAnalysisStage("fetching-pr");
+    setAnalysisStage("calling-llm");
 
     try {
-      setAnalysisStage("collecting-context");
-      setAnalysisStage("calling-llm");
       const nextReport = await analyzePullRequestWithApi({
         config,
         owner: selectedSummary.owner,
         repo: selectedSummary.repo,
         pullNumber: selectedSummary.number,
       });
-      setAnalysisStage("validating-report");
       setReport(nextReport);
       setAnalysisStage("saving-history");
       await saveHistoryRecord(createHistoryRecord(repository, selectedSummary, selectedPullRequest, nextReport));
+      setHistoryRefreshKey((current) => current + 1);
       setFlowStatus("done");
     } catch (error) {
       setFlowStatus("error");
@@ -263,7 +262,7 @@ export default function HomePage() {
           </div>
 
           <aside>
-            <HistoryPanel />
+            <HistoryPanel refreshKey={historyRefreshKey} />
           </aside>
         </div>
       </div>

@@ -141,7 +141,7 @@ function readPullRequestSummary(value: unknown): PullRequestSummary {
   if (
     !isString(value.owner) ||
     !isString(value.repo) ||
-    typeof value.number !== "number" ||
+    !isPositiveSafeInteger(value.number) ||
     !isString(value.title) ||
     !isString(value.author) ||
     (value.state !== "open" && value.state !== "closed") ||
@@ -178,7 +178,7 @@ function isParsedGitHubUrl(value: unknown): value is ParsedGitHubUrl {
     return true;
   }
 
-  return value.type === "pull" && typeof value.pullNumber === "number";
+  return value.type === "pull" && isPositiveSafeInteger(value.pullNumber);
 }
 
 function isRepositoryRef(value: unknown): value is PullRequestSummary["headRepository"] {
@@ -191,4 +191,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
 }
