@@ -13,6 +13,8 @@ export interface PullRequestSummary {
   state: "open" | "closed";
   baseRef: string;
   headRef: string;
+  headSha?: string;
+  headRepository?: RepositoryRef;
   updatedAt: string;
   url: string;
 }

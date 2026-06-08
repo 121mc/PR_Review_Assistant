@@ -39,7 +39,7 @@ describe("collectAnalysisContext", () => {
     });
 
     const context = await collectAnalysisContext(github, "octo", "repo", 42, {
-      maxChars: 1000,
+      maxChars: 1800,
       maxPatchChars: 300,
       maxRepoContextFileChars: 200,
     });
@@ -133,7 +133,7 @@ describe("collectAnalysisContext", () => {
     });
 
     const context = await collectAnalysisContext(github, "octo", "repo", 42, {
-      maxChars: 850,
+      maxChars: 1500,
       maxPatchChars: 120,
       maxRepoContextFileChars: 500,
     });
@@ -185,6 +185,59 @@ describe("collectAnalysisContext", () => {
     expect(context.contextFiles).toEqual([]);
     expect(context.changedFiles[0].contentSnippet).toBeUndefined();
     expect(context.truncationNotes.join("\n")).toContain("Skipped patch");
+  });
+
+  it("marks high-priority overflow when serialized metadata and summaries exceed budget", async () => {
+    const maxChars = 2500;
+    const github = fakeGitHubClient({
+      changedFiles: Array.from({ length: 20 }, (_, index) =>
+        changedFile({
+          filename: `src/components/feature-${index.toString().padStart(2, "0")}.ts`,
+          patch: undefined,
+          rawUrl: undefined,
+          isBinary: true,
+        }),
+      ),
+      files: {},
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, { maxChars });
+    const serializedLength = JSON.stringify(context, null, 2).length;
+
+    if (serializedLength > maxChars) {
+      expect(context.truncated).toBe(true);
+      expect(context.truncationNotes.join("\n")).toMatch(/high-priority.*exceed/i);
+    } else {
+      expect(serializedLength).toBeLessThanOrEqual(maxChars);
+    }
+  });
+
+  it("fetches changed file snippets from the fork head repository at the head SHA", async () => {
+    const headSha = "abc123forksha";
+    const github = fakeGitHubClient({
+      pullRequest: {
+        summary: {
+          ...pullRequestDetail().summary,
+          headRef: "feature-branch",
+          headSha,
+          headRepository: { owner: "forker", repo: "forked-repo", url: "https://github.com/forker/forked-repo" },
+        },
+      } as Partial<PullRequestDetail>,
+      changedFiles: [changedFile({ filename: "src/file.ts", patch: "@@ -1 +1 @@\n+export const value = 1;" })],
+      files: {},
+    });
+    github.getFileContent.mockImplementation(async (requestOwner, requestRepo, path, ref) => {
+      if (requestOwner === "forker" && requestRepo === "forked-repo" && path === "src/file.ts" && ref === headSha) {
+        return "export const value = 1;\n";
+      }
+      return null;
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42);
+
+    expect(github.getFileContent).toHaveBeenCalledWith("forker", "forked-repo", "src/file.ts", headSha);
+    expect(github.getFileContent).not.toHaveBeenCalledWith("octo", "repo", "src/file.ts", "feature-branch");
+    expect(context.changedFiles[0].contentSnippet).toBe("export const value = 1;\n");
   });
 
   it("uses canonical language labels and repository context kinds", async () => {
@@ -254,7 +307,10 @@ function fakeGitHubClient(input: {
   return {
     getPullDetail: vi.fn(async () => pullRequest),
     listChangedFiles: vi.fn(async () => input.changedFiles),
-    getFileContent: vi.fn(async (_owner: string, _repo: string, path: string) => files[path] ?? null),
+    getFileContent: vi.fn(async (_owner: string, _repo: string, path: string, ref: string) => {
+      void ref;
+      return files[path] ?? null;
+    }),
     listDirectoryFilePaths: vi.fn(async (_owner: string, _repo: string, path: string) => directoryFiles[path] ?? []),
   };
 }

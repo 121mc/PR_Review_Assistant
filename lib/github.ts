@@ -19,7 +19,15 @@ interface GitHubPullResponse {
   user?: { login?: string | null } | null;
   state: string;
   base?: { ref?: string | null } | null;
-  head?: { ref?: string | null } | null;
+  head?: {
+    ref?: string | null;
+    sha?: string | null;
+    repo?: {
+      name?: string | null;
+      html_url?: string | null;
+      owner?: { login?: string | null } | null;
+    } | null;
+  } | null;
   updated_at: string;
   html_url: string;
   body?: string | null;
@@ -205,6 +213,8 @@ export class GitHubClient {
 }
 
 function normalizePullSummary(pull: GitHubPullResponse, owner: string, repo: string): PullRequestSummary {
+  const headRepository = normalizeHeadRepository(pull);
+
   return {
     owner,
     repo,
@@ -214,8 +224,26 @@ function normalizePullSummary(pull: GitHubPullResponse, owner: string, repo: str
     state: pull.state === "closed" ? "closed" : "open",
     baseRef: pull.base?.ref ?? "",
     headRef: pull.head?.ref ?? "",
+    ...(pull.head?.sha ? { headSha: pull.head.sha } : {}),
+    ...(headRepository === undefined ? {} : { headRepository }),
     updatedAt: pull.updated_at,
     url: pull.html_url,
+  };
+}
+
+function normalizeHeadRepository(pull: GitHubPullResponse): PullRequestSummary["headRepository"] {
+  const headRepo = pull.head?.repo;
+  const headOwner = headRepo?.owner?.login;
+  const headName = headRepo?.name;
+
+  if (!headOwner || !headName) {
+    return undefined;
+  }
+
+  return {
+    owner: headOwner,
+    repo: headName,
+    url: headRepo.html_url ?? `https://github.com/${headOwner}/${headName}`,
   };
 }
 

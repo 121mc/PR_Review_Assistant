@@ -70,24 +70,34 @@ interface ContextCollectionOptions {
 
 interface Budget {
   maxChars: number;
-  usedChars: number;
+  measureUsedChars: () => number;
 }
 
-interface DirectoryListingGitHub {
-  listDirectoryFilePaths(owner: string, repo: string, path: string, ref: string): Promise<string[]>;
+interface FitTextInput {
+  budget: Budget;
+  content: string;
+  marker: string;
+  perFileLimit: number;
+  apply: (content: string | null) => void;
+}
+
+interface FitTextResult {
+  content: string | null;
+  truncated: boolean;
+}
+
+interface ContextGitHubClient extends Pick<GitHubClient, "getPullDetail" | "listChangedFiles" | "getFileContent"> {
+  listDirectoryFilePaths?(owner: string, repo: string, path: string, ref: string): Promise<string[]>;
 }
 
 export async function collectAnalysisContext(
-  github: Pick<GitHubClient, "getPullDetail" | "listChangedFiles" | "getFileContent">,
+  github: ContextGitHubClient,
   owner: string,
   repo: string,
   pullNumber: number,
   options: ContextCollectionOptions = {},
 ): Promise<AnalysisContext> {
-  const budget: Budget = {
-    maxChars: normalizeLimit(options.maxChars, MAX_CONTEXT_CHARS),
-    usedChars: 0,
-  };
+  const maxChars = normalizeLimit(options.maxChars, MAX_CONTEXT_CHARS);
   const maxPatchChars = normalizeLimit(options.maxPatchChars, MAX_PATCH_CHARS);
   const maxRepoContextFileChars = normalizeLimit(options.maxRepoContextFileChars, MAX_REPO_CONTEXT_FILE_CHARS);
   const truncationNotes: string[] = [];
@@ -105,18 +115,34 @@ export async function collectAnalysisContext(
     }
   }
 
-  consumeBudget(budget, estimatePullRequestChars(pullRequest) + owner.length + repo.length);
-  const changedFiles = changedFilesFromGitHub.map((file) => copyChangedFileWithSummaryBudget(file, budget));
+  const repository = { owner, repo, url: `https://github.com/${owner}/${repo}` };
+  const changedFiles = changedFilesFromGitHub.map(copyChangedFileSummary);
+  const contextFiles: RepositoryContextFile[] = [];
+  const budget: Budget = {
+    maxChars,
+    measureUsedChars: () =>
+      measureJsonChars({
+        repository,
+        pullRequest,
+        changedFiles,
+        contextFiles,
+        detectedLanguages: orderedLanguages(detectedLanguageSet),
+        truncated: truncationNotes.length > 0,
+        truncationNotes,
+      }),
+  };
+
   markIfHighPriorityContentExceedsBudget(budget, truncationNotes);
 
-  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes, "small");
+  applyPatchBudgets(changedFilesFromGitHub, changedFiles, budget, maxPatchChars, truncationNotes, "small");
 
-  const contextFiles = await collectRepositoryContextFiles({
+  await collectRepositoryContextFiles({
     github,
     owner,
     repo,
     ref: pullRequest.summary.baseRef,
     detectedLanguages: detectedLanguageSet,
+    contextFiles,
     budget,
     maxRepoContextFileChars,
     truncationNotes,
@@ -126,13 +152,15 @@ export async function collectAnalysisContext(
     addRepositoryLanguageEvidence(detectedLanguageSet, contextFile.path);
   }
 
-  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes, "large");
+  applyPatchBudgets(changedFilesFromGitHub, changedFiles, budget, maxPatchChars, truncationNotes, "large");
+
+  const snippetSource = changedFileSnippetSource(pullRequest, owner, repo);
 
   await collectChangedFileSnippets({
     github,
-    owner,
-    repo,
-    ref: pullRequest.summary.headRef,
+    owner: snippetSource.owner,
+    repo: snippetSource.repo,
+    ref: snippetSource.ref,
     changedFiles,
     budget,
     maxSnippetChars: maxRepoContextFileChars,
@@ -140,7 +168,7 @@ export async function collectAnalysisContext(
   });
 
   return {
-    repository: { owner, repo, url: `https://github.com/${owner}/${repo}` },
+    repository,
     pullRequest,
     changedFiles,
     contextFiles,
@@ -150,80 +178,86 @@ export async function collectAnalysisContext(
   };
 }
 
-function copyChangedFileWithSummaryBudget(file: ChangedFile, budget: Budget): ChangedFile {
+function copyChangedFileSummary(file: ChangedFile): ChangedFile {
   const copy: ChangedFile = { ...file };
-  consumeBudget(budget, estimateChangedFileSummaryChars(copy));
+  delete copy.patch;
+  delete copy.contentSnippet;
   return copy;
 }
 
 function applyPatchBudgets(
+  sourceFiles: ChangedFile[],
   changedFiles: ChangedFile[],
   budget: Budget,
   maxPatchChars: number,
   truncationNotes: string[],
   size: "small" | "large",
 ): void {
-  const patchFiles = changedFiles.filter((file) => !file.isBinary && file.patch !== undefined);
-  const selectedPatchFiles = patchFiles.filter((file) =>
-    size === "small" ? (file.patch?.length ?? 0) <= maxPatchChars : (file.patch?.length ?? 0) > maxPatchChars,
+  const patchFiles = sourceFiles.map((sourceFile, index) => ({ sourceFile, targetFile: changedFiles[index] }));
+  const selectedPatchFiles = patchFiles.filter(({ sourceFile }) =>
+    size === "small" ? (sourceFile.patch?.length ?? 0) <= maxPatchChars : (sourceFile.patch?.length ?? 0) > maxPatchChars,
   );
 
-  for (const file of selectedPatchFiles) {
-    applyPatchBudget(file, budget, maxPatchChars, truncationNotes);
+  for (const { sourceFile, targetFile } of selectedPatchFiles) {
+    applyPatchBudget(sourceFile, targetFile, budget, maxPatchChars, truncationNotes);
   }
 }
 
 function applyPatchBudget(
-  file: ChangedFile,
+  sourceFile: ChangedFile,
+  targetFile: ChangedFile,
   budget: Budget,
   maxPatchChars: number,
   truncationNotes: string[],
 ): void {
-  if (file.isBinary || file.patch === undefined) {
+  if (sourceFile.isBinary || sourceFile.patch === undefined) {
     return;
   }
 
-  const availableChars = Math.min(maxPatchChars, remainingBudget(budget));
-  if (availableChars <= 0) {
-    delete file.patch;
-    file.truncated = true;
-    truncationNotes.push(`Skipped patch for ${file.filename} due to context budget limit.`);
+  const truncatedByFileLimit = sourceFile.patch.length > maxPatchChars;
+  const skippedNote = `Skipped patch for ${sourceFile.filename} due to context budget limit.`;
+  const truncationNote = truncatedByFileLimit
+    ? `Patch truncated for ${sourceFile.filename} due to file-size limit.`
+    : `Patch truncated for ${sourceFile.filename} due to context budget limit.`;
+  const fit = fitTextWithinBudget({
+    budget,
+    content: sourceFile.patch,
+    marker: PATCH_TRUNCATION_MARKER,
+    perFileLimit: maxPatchChars,
+    apply: (patch) => {
+      if (patch === null) {
+        delete targetFile.patch;
+        return;
+      }
+      targetFile.patch = patch;
+    },
+  });
+
+  if (fit.content === null) {
+    delete targetFile.patch;
+    targetFile.truncated = true;
+    truncationNotes.push(skippedNote);
     return;
   }
 
-  const truncatedByFileLimit = file.patch.length > maxPatchChars;
-  const truncatedByContextLimit = file.patch.length > availableChars;
-
-  if (truncatedByFileLimit || truncatedByContextLimit) {
-    const truncatedPatch = truncateWithMarker(file.patch, availableChars, PATCH_TRUNCATION_MARKER);
-    file.truncated = true;
-    if (truncatedPatch === null) {
-      delete file.patch;
-      truncationNotes.push(`Skipped patch for ${file.filename} due to context budget limit.`);
-      return;
-    }
-    file.patch = truncatedPatch;
-    truncationNotes.push(
-      truncatedByFileLimit
-        ? `Patch truncated for ${file.filename} due to file-size limit.`
-        : `Patch truncated for ${file.filename} due to context budget limit.`,
-    );
+  targetFile.patch = fit.content;
+  if (fit.truncated) {
+    targetFile.truncated = true;
+    truncationNotes.push(truncationNote);
   }
-
-  consumeBudget(budget, file.patch.length);
 }
 
 async function collectRepositoryContextFiles(input: {
-  github: Pick<GitHubClient, "getFileContent">;
+  github: ContextGitHubClient;
   owner: string;
   repo: string;
   ref: string;
   detectedLanguages: Set<CanonicalLanguage>;
+  contextFiles: RepositoryContextFile[];
   budget: Budget;
   maxRepoContextFileChars: number;
   truncationNotes: string[];
 }): Promise<RepositoryContextFile[]> {
-  const contextFiles: RepositoryContextFile[] = [];
   const paths = await candidateContextPaths(input.github, input.owner, input.repo, input.ref, input.detectedLanguages);
 
   for (const path of paths) {
@@ -238,38 +272,49 @@ async function collectRepositoryContextFiles(input: {
     }
 
     const kind = contextKindForPath(path);
-    const availableContentChars = Math.min(
-      input.maxRepoContextFileChars,
-      Math.max(0, remainingBudget(input.budget) - estimateRepositoryContextMetadataChars(path, kind)),
-    );
-    if (availableContentChars <= 0) {
+    const contextFile: RepositoryContextFile = { path, kind, content: "", truncated: false };
+    const fit = fitTextWithinBudget({
+      budget: input.budget,
+      content,
+      marker: REPO_CONTEXT_TRUNCATION_MARKER,
+      perFileLimit: input.maxRepoContextFileChars,
+      apply: (storedContent) => {
+        const existingIndex = input.contextFiles.indexOf(contextFile);
+        if (storedContent === null) {
+          if (existingIndex !== -1) {
+            input.contextFiles.splice(existingIndex, 1);
+          }
+          return;
+        }
+
+        contextFile.content = storedContent;
+        if (existingIndex === -1) {
+          input.contextFiles.push(contextFile);
+        }
+      },
+    });
+
+    if (fit.content === null) {
       input.truncationNotes.push(`Skipped repository context file ${path} due to context budget limit.`);
       break;
     }
 
-    const truncated = content.length > availableContentChars;
-    const storedContent = truncated
-      ? truncateWithMarker(content, availableContentChars, REPO_CONTEXT_TRUNCATION_MARKER)
-      : content;
-
-    if (storedContent === null) {
-      input.truncationNotes.push(`Skipped repository context file ${path} due to context budget limit.`);
-      break;
+    contextFile.content = fit.content;
+    contextFile.truncated = fit.truncated;
+    if (!input.contextFiles.includes(contextFile)) {
+      input.contextFiles.push(contextFile);
     }
 
-    if (truncated) {
+    if (fit.truncated) {
       input.truncationNotes.push(`Repository context file truncated for ${path} due to file-size limit.`);
     }
-
-    contextFiles.push({ path, kind, content: storedContent, truncated });
-    consumeBudget(input.budget, estimateRepositoryContextMetadataChars(path, kind) + storedContent.length);
   }
 
-  return contextFiles;
+  return input.contextFiles;
 }
 
 async function collectChangedFileSnippets(input: {
-  github: Pick<GitHubClient, "getFileContent">;
+  github: ContextGitHubClient;
   owner: string;
   repo: string;
   ref: string;
@@ -293,38 +338,47 @@ async function collectChangedFileSnippets(input: {
       continue;
     }
 
-    const availableSnippetChars = Math.min(
-      input.maxSnippetChars,
-      Math.max(0, remainingBudget(input.budget) - file.filename.length),
-    );
-    if (availableSnippetChars <= 0) {
+    const fit = fitTextWithinBudget({
+      budget: input.budget,
+      content,
+      marker: CONTENT_SNIPPET_TRUNCATION_MARKER,
+      perFileLimit: input.maxSnippetChars,
+      apply: (snippet) => {
+        if (snippet === null) {
+          delete file.contentSnippet;
+          return;
+        }
+        file.contentSnippet = snippet;
+      },
+    });
+
+    if (fit.content === null) {
       input.truncationNotes.push(`Skipped changed file content snippet for ${file.filename} due to context budget limit.`);
       break;
     }
 
-    const truncated = content.length > availableSnippetChars;
-    const snippet = truncated
-      ? truncateWithMarker(content, availableSnippetChars, CONTENT_SNIPPET_TRUNCATION_MARKER)
-      : content;
-
-    if (snippet === null) {
-      input.truncationNotes.push(`Skipped changed file content snippet for ${file.filename} due to context budget limit.`);
-      break;
-    }
-
-    file.contentSnippet = snippet;
-
-    if (truncated) {
+    file.contentSnippet = fit.content;
+    if (fit.truncated) {
       file.truncated = true;
       input.truncationNotes.push(`Changed file content snippet truncated for ${file.filename} due to file-size limit.`);
     }
-
-    consumeBudget(input.budget, file.filename.length + file.contentSnippet.length);
   }
 }
 
+function changedFileSnippetSource(
+  pullRequest: PullRequestDetail,
+  fallbackOwner: string,
+  fallbackRepo: string,
+): { owner: string; repo: string; ref: string } {
+  return {
+    owner: pullRequest.summary.headRepository?.owner ?? fallbackOwner,
+    repo: pullRequest.summary.headRepository?.repo ?? fallbackRepo,
+    ref: pullRequest.summary.headSha ?? pullRequest.summary.headRef,
+  };
+}
+
 async function candidateContextPaths(
-  github: Pick<GitHubClient, "getFileContent">,
+  github: ContextGitHubClient,
   owner: string,
   repo: string,
   ref: string,
@@ -357,7 +411,7 @@ async function candidateContextPaths(
 }
 
 async function workflowContextPaths(
-  github: Pick<GitHubClient, "getFileContent">,
+  github: ContextGitHubClient,
   owner: string,
   repo: string,
   ref: string,
@@ -370,13 +424,8 @@ async function workflowContextPaths(
   return paths.filter((path) => path.toLowerCase().startsWith(".github/workflows/"));
 }
 
-function supportsDirectoryListing(github: unknown): github is DirectoryListingGitHub {
-  return (
-    typeof github === "object" &&
-    github !== null &&
-    "listDirectoryFilePaths" in github &&
-    typeof (github as { listDirectoryFilePaths?: unknown }).listDirectoryFilePaths === "function"
-  );
+function supportsDirectoryListing(github: ContextGitHubClient): github is ContextGitHubClient & Required<Pick<ContextGitHubClient, "listDirectoryFilePaths">> {
+  return typeof github.listDirectoryFilePaths === "function";
 }
 
 function addRepositoryLanguageEvidence(languages: Set<CanonicalLanguage>, path: string): void {
@@ -495,25 +544,49 @@ function contextKindForPath(path: string): RepositoryContextFileKind {
   return "other";
 }
 
-function truncateWithMarker(content: string, limit: number, marker: string): string | null {
-  if (content.length <= limit) {
-    return content;
+function fitTextWithinBudget(input: FitTextInput): FitTextResult {
+  if (input.content.length <= input.perFileLimit && candidateFitsBudget(input, input.content)) {
+    return { content: input.content, truncated: false };
   }
 
-  if (limit < marker.length) {
-    return null;
+  if (input.perFileLimit < input.marker.length) {
+    input.apply(null);
+    return { content: null, truncated: true };
   }
 
-  if (limit === marker.length) {
+  let best: string | null = null;
+  let low = 0;
+  let high = Math.max(0, input.perFileLimit - input.marker.length - 1);
+
+  while (low <= high) {
+    const prefixLength = Math.floor((low + high) / 2);
+    const candidate = truncatedText(input.content, prefixLength, input.marker);
+
+    if (candidateFitsBudget(input, candidate)) {
+      best = candidate;
+      low = prefixLength + 1;
+    } else {
+      high = prefixLength - 1;
+    }
+  }
+
+  input.apply(null);
+  return { content: best, truncated: true };
+}
+
+function candidateFitsBudget(input: FitTextInput, candidate: string): boolean {
+  input.apply(candidate);
+  const fits = input.budget.measureUsedChars() <= input.budget.maxChars;
+  input.apply(null);
+  return fits;
+}
+
+function truncatedText(content: string, prefixLength: number, marker: string): string {
+  if (prefixLength <= 0) {
     return marker;
   }
 
-  const contentLimit = limit - marker.length - 1;
-  if (contentLimit <= 0) {
-    return marker;
-  }
-
-  return `${content.slice(0, contentLimit)}\n${marker}`;
+  return `${content.slice(0, prefixLength)}\n${marker}`;
 }
 
 function normalizeLimit(value: number | undefined, fallback: number): number {
@@ -524,36 +597,16 @@ function normalizeLimit(value: number | undefined, fallback: number): number {
   return Math.max(0, Math.floor(value));
 }
 
-function consumeBudget(budget: Budget, chars: number): void {
-  budget.usedChars += Math.max(0, chars);
-}
-
 function remainingBudget(budget: Budget): number {
-  return Math.max(0, budget.maxChars - budget.usedChars);
+  return Math.max(0, budget.maxChars - budget.measureUsedChars());
 }
 
 function markIfHighPriorityContentExceedsBudget(budget: Budget, truncationNotes: string[]): void {
-  if (budget.usedChars > budget.maxChars) {
-    truncationNotes.push("Context budget exceeded by high-priority pull request metadata or file summaries.");
+  if (budget.measureUsedChars() > budget.maxChars) {
+    truncationNotes.push("High-priority pull request metadata or file summaries exceed the context budget.");
   }
 }
 
-function estimatePullRequestChars(pullRequest: PullRequestDetail): number {
-  return JSON.stringify(pullRequest).length;
-}
-
-function estimateChangedFileSummaryChars(file: ChangedFile): number {
-  return (
-    file.filename.length +
-    file.status.length +
-    String(file.additions).length +
-    String(file.deletions).length +
-    String(file.changes).length +
-    (file.rawUrl?.length ?? 0) +
-    20
-  );
-}
-
-function estimateRepositoryContextMetadataChars(path: string, kind: RepositoryContextFileKind): number {
-  return path.length + kind.length + 10;
+function measureJsonChars(value: unknown): number {
+  return JSON.stringify(value, null, 2).length;
 }
