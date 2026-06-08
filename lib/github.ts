@@ -45,6 +45,11 @@ interface GitHubContentResponse {
   encoding?: string;
 }
 
+interface GitHubDirectoryContentResponse {
+  path?: string;
+  type?: string;
+}
+
 interface GitHubCommentResponse {
   html_url?: string;
 }
@@ -122,6 +127,27 @@ export class GitHubClient {
     }
 
     return decodeTextContent(payload.content);
+  }
+
+  async listDirectoryFilePaths(owner: string, repo: string, path: string, ref: string): Promise<string[]> {
+    const response = await fetch(
+      `${GITHUB_API_BASE_URL}/repos/${encodeSegment(owner)}/${encodeSegment(repo)}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`,
+      { headers: this.buildHeaders() },
+    );
+
+    if (response.status === 404) {
+      return [];
+    }
+    await this.throwIfNotOk(response, "GITHUB_REPO_NOT_FOUND", "read");
+
+    const payload = (await response.json()) as GitHubContentResponse | GitHubDirectoryContentResponse[];
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+
+    return payload
+      .filter((item) => item.type === "file" && typeof item.path === "string")
+      .map((item) => item.path as string);
   }
 
   async createPullComment(

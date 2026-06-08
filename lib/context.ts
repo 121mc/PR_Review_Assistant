@@ -25,6 +25,12 @@ const COMMON_CONTEXT_PATHS = [
   "CONTRIBUTING",
   ".github/pull_request_template.md",
 ] as const;
+const FALLBACK_WORKFLOW_CONTEXT_PATHS = [
+  ".github/workflows/ci.yml",
+  ".github/workflows/ci.yaml",
+  ".github/workflows/test.yml",
+  ".github/workflows/test.yaml",
+] as const;
 
 const LANGUAGE_CONTEXT_PATHS: Record<Exclude<CanonicalLanguage, "Other">, readonly string[]> = {
   TypeScript: [
@@ -67,6 +73,10 @@ interface Budget {
   usedChars: number;
 }
 
+interface DirectoryListingGitHub {
+  listDirectoryFilePaths(owner: string, repo: string, path: string, ref: string): Promise<string[]>;
+}
+
 export async function collectAnalysisContext(
   github: Pick<GitHubClient, "getPullDetail" | "listChangedFiles" | "getFileContent">,
   owner: string,
@@ -99,6 +109,8 @@ export async function collectAnalysisContext(
   const changedFiles = changedFilesFromGitHub.map((file) => copyChangedFileWithSummaryBudget(file, budget));
   markIfHighPriorityContentExceedsBudget(budget, truncationNotes);
 
+  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes, "small");
+
   const contextFiles = await collectRepositoryContextFiles({
     github,
     owner,
@@ -114,7 +126,7 @@ export async function collectAnalysisContext(
     addRepositoryLanguageEvidence(detectedLanguageSet, contextFile.path);
   }
 
-  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes);
+  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes, "large");
 
   await collectChangedFileSnippets({
     github,
@@ -149,12 +161,14 @@ function applyPatchBudgets(
   budget: Budget,
   maxPatchChars: number,
   truncationNotes: string[],
+  size: "small" | "large",
 ): void {
   const patchFiles = changedFiles.filter((file) => !file.isBinary && file.patch !== undefined);
-  const smallPatchFiles = patchFiles.filter((file) => (file.patch?.length ?? 0) <= maxPatchChars);
-  const largePatchFiles = patchFiles.filter((file) => (file.patch?.length ?? 0) > maxPatchChars);
+  const selectedPatchFiles = patchFiles.filter((file) =>
+    size === "small" ? (file.patch?.length ?? 0) <= maxPatchChars : (file.patch?.length ?? 0) > maxPatchChars,
+  );
 
-  for (const file of [...smallPatchFiles, ...largePatchFiles]) {
+  for (const file of selectedPatchFiles) {
     applyPatchBudget(file, budget, maxPatchChars, truncationNotes);
   }
 }
@@ -210,8 +224,9 @@ async function collectRepositoryContextFiles(input: {
   truncationNotes: string[];
 }): Promise<RepositoryContextFile[]> {
   const contextFiles: RepositoryContextFile[] = [];
+  const paths = await candidateContextPaths(input.github, input.owner, input.repo, input.ref, input.detectedLanguages);
 
-  for (const path of candidateContextPaths(input.detectedLanguages)) {
+  for (const path of paths) {
     if (remainingBudget(input.budget) <= 0) {
       input.truncationNotes.push(`Skipped repository context file ${path} due to context budget limit.`);
       break;
@@ -308,8 +323,18 @@ async function collectChangedFileSnippets(input: {
   }
 }
 
-function candidateContextPaths(detectedLanguages: Set<CanonicalLanguage>): string[] {
+async function candidateContextPaths(
+  github: Pick<GitHubClient, "getFileContent">,
+  owner: string,
+  repo: string,
+  ref: string,
+  detectedLanguages: Set<CanonicalLanguage>,
+): Promise<string[]> {
   const paths = new Set<string>(COMMON_CONTEXT_PATHS);
+  for (const workflowPath of await workflowContextPaths(github, owner, repo, ref)) {
+    paths.add(workflowPath);
+  }
+
   const languagesToLoad = new Set(detectedLanguages);
 
   if (languagesToLoad.size === 0 || (languagesToLoad.size === 1 && languagesToLoad.has("Other"))) {
@@ -329,6 +354,29 @@ function candidateContextPaths(detectedLanguages: Set<CanonicalLanguage>): strin
   }
 
   return [...paths];
+}
+
+async function workflowContextPaths(
+  github: Pick<GitHubClient, "getFileContent">,
+  owner: string,
+  repo: string,
+  ref: string,
+): Promise<string[]> {
+  if (!supportsDirectoryListing(github)) {
+    return [...FALLBACK_WORKFLOW_CONTEXT_PATHS];
+  }
+
+  const paths = await github.listDirectoryFilePaths(owner, repo, ".github/workflows", ref);
+  return paths.filter((path) => path.toLowerCase().startsWith(".github/workflows/"));
+}
+
+function supportsDirectoryListing(github: unknown): github is DirectoryListingGitHub {
+  return (
+    typeof github === "object" &&
+    github !== null &&
+    "listDirectoryFilePaths" in github &&
+    typeof (github as { listDirectoryFilePaths?: unknown }).listDirectoryFilePaths === "function"
+  );
 }
 
 function addRepositoryLanguageEvidence(languages: Set<CanonicalLanguage>, path: string): void {

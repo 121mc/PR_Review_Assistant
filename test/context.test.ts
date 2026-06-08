@@ -124,6 +124,48 @@ describe("collectAnalysisContext", () => {
     expect(context.contextFiles.find((file) => file.path === "package.json")?.content.length).toBeLessThanOrEqual(160);
   });
 
+  it("does not let a large repository context file starve a small patch", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [changedFile({ filename: "src/feature.ts", patch: "@@ -1 +1 @@\n+small useful patch" })],
+      files: {
+        "README.md": "r".repeat(5000),
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars: 850,
+      maxPatchChars: 120,
+      maxRepoContextFileChars: 500,
+    });
+
+    expect(context.changedFiles[0].patch ?? "").toContain("small useful patch");
+    expect(context.contextFiles).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "README.md", kind: "readme", truncated: true })]),
+    );
+    expect(context.contextFiles.find((file) => file.path === "README.md")?.content.length).toBeLessThanOrEqual(500);
+  });
+
+  it("collects discovered GitHub workflow files as CI context", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [changedFile({ filename: "src/feature.ts" })],
+      files: {
+        ".github/workflows/ci.yml": "name: CI\non: [push]\n",
+      },
+      directoryFiles: {
+        ".github/workflows": [".github/workflows/ci.yml"],
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42);
+
+    expect(github.listDirectoryFilePaths).toHaveBeenCalledWith("octo", "repo", ".github/workflows", "main");
+    expect(context.contextFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: ".github/workflows/ci.yml", kind: "ci", content: expect.stringContaining("CI") }),
+      ]),
+    );
+  });
+
   it("skips low-priority content instead of storing markers after the global budget is exhausted", async () => {
     const github = fakeGitHubClient({
       changedFiles: [changedFile({ filename: "src/file.ts", patch: "p".repeat(1000) })],
@@ -203,14 +245,17 @@ function fakeGitHubClient(input: {
   pullRequest?: Partial<PullRequestDetail>;
   changedFiles: ChangedFile[];
   files?: Record<string, string | null>;
+  directoryFiles?: Record<string, string[]>;
 }) {
   const pullRequest = pullRequestDetail(input.pullRequest);
   const files = input.files ?? {};
+  const directoryFiles = input.directoryFiles ?? {};
 
   return {
     getPullDetail: vi.fn(async () => pullRequest),
     listChangedFiles: vi.fn(async () => input.changedFiles),
     getFileContent: vi.fn(async (_owner: string, _repo: string, path: string) => files[path] ?? null),
+    listDirectoryFilePaths: vi.fn(async (_owner: string, _repo: string, path: string) => directoryFiles[path] ?? []),
   };
 }
 
