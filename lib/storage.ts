@@ -23,12 +23,26 @@ interface PrManagerDatabase extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<PrManagerDatabase>> | undefined;
 
 export function loadAppConfig(): AppConfig | undefined {
-  const saved = getLocalStorage().getItem(CONFIG_STORAGE_KEY);
+  const storage = getLocalStorage();
+  const saved = storage.getItem(CONFIG_STORAGE_KEY);
   if (!saved) {
     return undefined;
   }
 
-  return JSON.parse(saved) as AppConfig;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved);
+  } catch {
+    storage.removeItem(CONFIG_STORAGE_KEY);
+    return undefined;
+  }
+
+  if (!isAppConfig(parsed)) {
+    storage.removeItem(CONFIG_STORAGE_KEY);
+    return undefined;
+  }
+
+  return parsed;
 }
 
 export function saveAppConfig(config: AppConfig): void {
@@ -37,10 +51,10 @@ export function saveAppConfig(config: AppConfig): void {
 
 export function hasCompleteConfig(config: Partial<AppConfig> | null | undefined): config is AppConfig {
   return Boolean(
-    config?.githubToken?.trim() &&
-      config.llmBaseUrl?.trim() &&
-      config.llmApiKey?.trim() &&
-      config.llmModel?.trim(),
+    hasContent(config?.githubToken) &&
+      hasContent(config.llmBaseUrl) &&
+      hasContent(config.llmApiKey) &&
+      hasContent(config.llmModel),
   );
 }
 
@@ -52,7 +66,8 @@ export async function saveHistoryRecord(record: HistoryRecord): Promise<void> {
 
 export async function listHistoryRecords(): Promise<HistoryRecord[]> {
   const db = await getDatabase();
-  return db.getAll(HISTORY_STORE_NAME);
+  const records = await db.getAll(HISTORY_STORE_NAME);
+  return records.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export async function getHistoryRecord(id: string): Promise<HistoryRecord | undefined> {
@@ -92,6 +107,24 @@ function getDatabase(): Promise<IDBPDatabase<PrManagerDatabase>> {
   });
 
   return dbPromise;
+}
+
+function isAppConfig(value: unknown): value is AppConfig {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const config = value as Record<string, unknown>;
+  return (
+    typeof config.githubToken === "string" &&
+    typeof config.llmBaseUrl === "string" &&
+    typeof config.llmApiKey === "string" &&
+    typeof config.llmModel === "string"
+  );
+}
+
+function hasContent(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function assertNoSecretKeys(value: unknown): void {

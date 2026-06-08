@@ -13,6 +13,8 @@ import {
 import type { HistoryRecord } from "../lib/types";
 import { validReport } from "./fixtures/report";
 
+const configStorageKey = "pr-manager-config";
+
 const completeConfig: AppConfig = {
   githubToken: "ghp_test",
   llmBaseUrl: "https://llm.test/v1",
@@ -56,6 +58,28 @@ describe("storage", () => {
     expect(loadAppConfig()).toEqual(completeConfig);
   });
 
+  it("removes malformed config JSON and returns undefined", () => {
+    localStorage.setItem(configStorageKey, "{not-json");
+
+    expect(loadAppConfig()).toBeUndefined();
+    expect(localStorage.getItem(configStorageKey)).toBeNull();
+  });
+
+  it("removes valid JSON with an invalid config shape and returns undefined", () => {
+    localStorage.setItem(
+      configStorageKey,
+      JSON.stringify({
+        githubToken: 42,
+        llmBaseUrl: "https://llm.test/v1",
+        llmApiKey: "sk_test",
+        llmModel: "model-a",
+      }),
+    );
+
+    expect(loadAppConfig()).toBeUndefined();
+    expect(localStorage.getItem(configStorageKey)).toBeNull();
+  });
+
   it("checks whether app config has all required fields", () => {
     expect(hasCompleteConfig(undefined)).toBe(false);
     expect(hasCompleteConfig({ ...completeConfig, githubToken: "" })).toBe(false);
@@ -65,6 +89,21 @@ describe("storage", () => {
     expect(hasCompleteConfig(completeConfig)).toBe(true);
   });
 
+  it("treats whitespace-only and non-string config fields as incomplete", () => {
+    expect(hasCompleteConfig({ ...completeConfig, githubToken: "   " })).toBe(false);
+    expect(hasCompleteConfig({ ...completeConfig, llmBaseUrl: "\n\t" })).toBe(false);
+    expect(hasCompleteConfig({ ...completeConfig, llmApiKey: "   " })).toBe(false);
+    expect(hasCompleteConfig({ ...completeConfig, llmModel: "   " })).toBe(false);
+    expect(
+      hasCompleteConfig({
+        githubToken: "ghp_test",
+        llmBaseUrl: "https://llm.test/v1",
+        llmApiKey: 123,
+        llmModel: "model-a",
+      } as unknown as Partial<AppConfig>),
+    ).toBe(false);
+  });
+
   it("saves full history records in IndexedDB", async () => {
     await saveHistoryRecord(historyRecord());
 
@@ -72,6 +111,25 @@ describe("storage", () => {
     expect(records).toHaveLength(1);
     expect(records[0]).toEqual(historyRecord());
     expect(records[0].report.reviewComment).toContain("Review");
+  });
+
+  it("lists history records by createdAt descending", async () => {
+    await saveHistoryRecord(
+      historyRecord({
+        id: "a-older",
+        createdAt: "2026-06-07T00:00:00Z",
+        reviewDraft: { body: validReport.reviewComment, sourceReportId: "a-older" },
+      }),
+    );
+    await saveHistoryRecord(
+      historyRecord({
+        id: "z-newer",
+        createdAt: "2026-06-09T00:00:00Z",
+        reviewDraft: { body: validReport.reviewComment, sourceReportId: "z-newer" },
+      }),
+    );
+
+    expect((await listHistoryRecords()).map((record) => record.id)).toEqual(["z-newer", "a-older"]);
   });
 
   it("gets and deletes a history record by id", async () => {
@@ -126,5 +184,7 @@ describe("storage", () => {
         },
       } as unknown as HistoryRecord),
     ).rejects.toThrow(/secret/i);
+
+    expect(await listHistoryRecords()).toEqual([]);
   });
 });
