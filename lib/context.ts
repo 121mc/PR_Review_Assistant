@@ -99,10 +99,6 @@ export async function collectAnalysisContext(
   const changedFiles = changedFilesFromGitHub.map((file) => copyChangedFileWithSummaryBudget(file, budget));
   markIfHighPriorityContentExceedsBudget(budget, truncationNotes);
 
-  for (const file of changedFiles) {
-    applyPatchBudget(file, budget, maxPatchChars, truncationNotes);
-  }
-
   const contextFiles = await collectRepositoryContextFiles({
     github,
     owner,
@@ -117,6 +113,8 @@ export async function collectAnalysisContext(
   for (const contextFile of contextFiles) {
     addRepositoryLanguageEvidence(detectedLanguageSet, contextFile.path);
   }
+
+  applyPatchBudgets(changedFiles, budget, maxPatchChars, truncationNotes);
 
   await collectChangedFileSnippets({
     github,
@@ -146,6 +144,21 @@ function copyChangedFileWithSummaryBudget(file: ChangedFile, budget: Budget): Ch
   return copy;
 }
 
+function applyPatchBudgets(
+  changedFiles: ChangedFile[],
+  budget: Budget,
+  maxPatchChars: number,
+  truncationNotes: string[],
+): void {
+  const patchFiles = changedFiles.filter((file) => !file.isBinary && file.patch !== undefined);
+  const smallPatchFiles = patchFiles.filter((file) => (file.patch?.length ?? 0) <= maxPatchChars);
+  const largePatchFiles = patchFiles.filter((file) => (file.patch?.length ?? 0) > maxPatchChars);
+
+  for (const file of [...smallPatchFiles, ...largePatchFiles]) {
+    applyPatchBudget(file, budget, maxPatchChars, truncationNotes);
+  }
+}
+
 function applyPatchBudget(
   file: ChangedFile,
   budget: Budget,
@@ -157,12 +170,25 @@ function applyPatchBudget(
   }
 
   const availableChars = Math.min(maxPatchChars, remainingBudget(budget));
+  if (availableChars <= 0) {
+    delete file.patch;
+    file.truncated = true;
+    truncationNotes.push(`Skipped patch for ${file.filename} due to context budget limit.`);
+    return;
+  }
+
   const truncatedByFileLimit = file.patch.length > maxPatchChars;
   const truncatedByContextLimit = file.patch.length > availableChars;
 
   if (truncatedByFileLimit || truncatedByContextLimit) {
-    file.patch = truncateWithMarker(file.patch, availableChars, PATCH_TRUNCATION_MARKER);
+    const truncatedPatch = truncateWithMarker(file.patch, availableChars, PATCH_TRUNCATION_MARKER);
     file.truncated = true;
+    if (truncatedPatch === null) {
+      delete file.patch;
+      truncationNotes.push(`Skipped patch for ${file.filename} due to context budget limit.`);
+      return;
+    }
+    file.patch = truncatedPatch;
     truncationNotes.push(
       truncatedByFileLimit
         ? `Patch truncated for ${file.filename} due to file-size limit.`
@@ -201,10 +227,20 @@ async function collectRepositoryContextFiles(input: {
       input.maxRepoContextFileChars,
       Math.max(0, remainingBudget(input.budget) - estimateRepositoryContextMetadataChars(path, kind)),
     );
+    if (availableContentChars <= 0) {
+      input.truncationNotes.push(`Skipped repository context file ${path} due to context budget limit.`);
+      break;
+    }
+
     const truncated = content.length > availableContentChars;
     const storedContent = truncated
       ? truncateWithMarker(content, availableContentChars, REPO_CONTEXT_TRUNCATION_MARKER)
       : content;
+
+    if (storedContent === null) {
+      input.truncationNotes.push(`Skipped repository context file ${path} due to context budget limit.`);
+      break;
+    }
 
     if (truncated) {
       input.truncationNotes.push(`Repository context file truncated for ${path} due to file-size limit.`);
@@ -246,10 +282,22 @@ async function collectChangedFileSnippets(input: {
       input.maxSnippetChars,
       Math.max(0, remainingBudget(input.budget) - file.filename.length),
     );
+    if (availableSnippetChars <= 0) {
+      input.truncationNotes.push(`Skipped changed file content snippet for ${file.filename} due to context budget limit.`);
+      break;
+    }
+
     const truncated = content.length > availableSnippetChars;
-    file.contentSnippet = truncated
+    const snippet = truncated
       ? truncateWithMarker(content, availableSnippetChars, CONTENT_SNIPPET_TRUNCATION_MARKER)
       : content;
+
+    if (snippet === null) {
+      input.truncationNotes.push(`Skipped changed file content snippet for ${file.filename} due to context budget limit.`);
+      break;
+    }
+
+    file.contentSnippet = snippet;
 
     if (truncated) {
       file.truncated = true;
@@ -399,16 +447,25 @@ function contextKindForPath(path: string): RepositoryContextFileKind {
   return "other";
 }
 
-function truncateWithMarker(content: string, limit: number, marker: string): string {
+function truncateWithMarker(content: string, limit: number, marker: string): string | null {
   if (content.length <= limit) {
     return content;
   }
 
-  if (limit <= 0) {
+  if (limit < marker.length) {
+    return null;
+  }
+
+  if (limit === marker.length) {
     return marker;
   }
 
-  return `${content.slice(0, limit)}\n${marker}`;
+  const contentLimit = limit - marker.length - 1;
+  if (contentLimit <= 0) {
+    return marker;
+  }
+
+  return `${content.slice(0, contentLimit)}\n${marker}`;
 }
 
 function normalizeLimit(value: number | undefined, fallback: number): number {

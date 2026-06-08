@@ -74,6 +74,77 @@ describe("collectAnalysisContext", () => {
     expect(context.truncationNotes.join("\n")).toContain("Patch truncated");
   });
 
+  it("preserves small patches and repository context under tight global budget pressure", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [
+        changedFile({ filename: "src/generated.ts", patch: "x".repeat(50000) }),
+        changedFile({ filename: "src/feature.ts", patch: "@@ -1 +1 @@\n+small useful patch" }),
+      ],
+      files: {
+        "package.json": '{"scripts":{"test":"vitest"}}',
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars: 4200,
+      maxPatchChars: 4000,
+      maxRepoContextFileChars: 400,
+    });
+
+    const generated = context.changedFiles.find((file) => file.filename === "src/generated.ts");
+    const feature = context.changedFiles.find((file) => file.filename === "src/feature.ts");
+
+    expect(generated?.truncated).toBe(true);
+    expect(feature?.patch).toContain("small useful patch");
+    expect(context.contextFiles).toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: "package.json", content: expect.stringContaining("vitest") })]),
+    );
+    expect(context.truncated).toBe(true);
+  });
+
+  it("keeps truncation markers inside per-file content budgets", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [changedFile({ filename: "src/main.ts", patch: "p".repeat(1000) })],
+      files: {
+        "package.json": "r".repeat(1000),
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars: 3000,
+      maxPatchChars: 120,
+      maxRepoContextFileChars: 160,
+    });
+
+    expect(context.changedFiles[0].patch).toContain("[Patch truncated due to file-size limit]");
+    expect(context.changedFiles[0].patch?.length).toBeLessThanOrEqual(120);
+    expect(context.contextFiles.find((file) => file.path === "package.json")?.content).toContain(
+      "[Repository context file truncated due to file-size limit]",
+    );
+    expect(context.contextFiles.find((file) => file.path === "package.json")?.content.length).toBeLessThanOrEqual(160);
+  });
+
+  it("skips low-priority content instead of storing markers after the global budget is exhausted", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [changedFile({ filename: "src/file.ts", patch: "p".repeat(1000) })],
+      files: {
+        "package.json": '{"scripts":{"test":"vitest"}}',
+        "src/file.ts": "export const value = 1;\n",
+      },
+    });
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars: 50,
+      maxPatchChars: 120,
+      maxRepoContextFileChars: 120,
+    });
+
+    expect(context.changedFiles[0].patch).toBeUndefined();
+    expect(context.contextFiles).toEqual([]);
+    expect(context.changedFiles[0].contentSnippet).toBeUndefined();
+    expect(context.truncationNotes.join("\n")).toContain("Skipped patch");
+  });
+
   it("uses canonical language labels and repository context kinds", async () => {
     const github = fakeGitHubClient({
       changedFiles: [
