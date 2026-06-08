@@ -167,12 +167,19 @@ export async function collectAnalysisContext(
     truncationNotes,
   });
 
+  const detectedLanguages = orderedLanguages(detectedLanguageSet);
+  markFinalSerializedContextOverflow(
+    { repository, pullRequest, changedFiles, contextFiles, detectedLanguages, truncationNotes },
+    maxChars,
+    truncationNotes,
+  );
+
   return {
     repository,
     pullRequest,
     changedFiles,
     contextFiles,
-    detectedLanguages: orderedLanguages(detectedLanguageSet),
+    detectedLanguages,
     truncated: truncationNotes.length > 0,
     truncationNotes,
   };
@@ -604,6 +611,17 @@ function remainingBudget(budget: Budget): number {
 function markIfHighPriorityContentExceedsBudget(budget: Budget, truncationNotes: string[]): void {
   if (budget.measureUsedChars() > budget.maxChars) {
     truncationNotes.push("High-priority pull request metadata or file summaries exceed the context budget.");
+  }
+}
+
+function markFinalSerializedContextOverflow(
+  context: Omit<AnalysisContext, "truncated">,
+  maxChars: number,
+  truncationNotes: string[],
+): void {
+  const serializedLength = measureJsonChars({ ...context, truncated: truncationNotes.length > 0 });
+  if (serializedLength > maxChars) {
+    truncationNotes.push("Final serialized analysis context exceeds the context budget.");
   }
 }
 

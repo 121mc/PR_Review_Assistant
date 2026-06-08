@@ -204,12 +204,32 @@ describe("collectAnalysisContext", () => {
     const context = await collectAnalysisContext(github, "octo", "repo", 42, { maxChars });
     const serializedLength = JSON.stringify(context, null, 2).length;
 
-    if (serializedLength > maxChars) {
-      expect(context.truncated).toBe(true);
-      expect(context.truncationNotes.join("\n")).toMatch(/high-priority.*exceed/i);
-    } else {
-      expect(serializedLength).toBeLessThanOrEqual(maxChars);
-    }
+    expect(serializedLength).toBeGreaterThan(maxChars);
+    expect(context.truncated).toBe(true);
+    expect(context.truncationNotes.join("\n")).toMatch(/high-priority.*exceed/i);
+  });
+
+  it("marks final serialized overflow after repository context adds language evidence", async () => {
+    const github = fakeGitHubClient({
+      changedFiles: [changedFile({ filename: "docs/readme.md", patch: undefined, rawUrl: undefined, isBinary: true })],
+      files: {
+        "package.json": "{}",
+      },
+    });
+    const generousContext = await collectAnalysisContext(github, "octo", "repo", 42, { maxChars: 10000 });
+    const maxChars = JSON.stringify(generousContext, null, 2).length - 1;
+
+    const context = await collectAnalysisContext(github, "octo", "repo", 42, {
+      maxChars,
+      maxPatchChars: 80,
+      maxRepoContextFileChars: 80,
+    });
+    const serializedLength = JSON.stringify(context, null, 2).length;
+
+    expect(context.detectedLanguages).toEqual(["JavaScript", "Other"]);
+    expect(serializedLength).toBeGreaterThan(maxChars);
+    expect(context.truncated).toBe(true);
+    expect(context.truncationNotes.join("\n")).toMatch(/final|serialized|high-priority/i);
   });
 
   it("fetches changed file snippets from the fork head repository at the head SHA", async () => {
