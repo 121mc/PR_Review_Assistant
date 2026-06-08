@@ -14,6 +14,10 @@
 
 Design spec: `docs/superpowers/specs/2026-06-08-pr-manager-design.md`
 
+## Project Root
+
+The Next.js project root is `D:\AI4SE_PROJECT`. All implementation paths in this plan are relative to that repository root. The `app/` directory is the Next.js App Router directory inside the root project, not a separate nested project. Do not create a second project under `D:\AI4SE_PROJECT\app\`.
+
 ## Worktree and Parallelization Notes
 
 Use `superpowers:using-git-worktrees` before implementation if multiple agents will work in parallel. The first task must land before any parallel work because it creates the project, package scripts, and test harness.
