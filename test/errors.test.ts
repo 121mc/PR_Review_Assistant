@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createApiError, jsonError, redactSecrets } from "../lib/errors";
 
@@ -31,6 +32,14 @@ describe("api errors", () => {
     expect(redactSecrets('{"token":"abc"}')).toBe('{"token":"[REDACTED]"}');
   });
 
+  it("redacts JSON-like strings whose keys contain secret terms", () => {
+    expect(redactSecrets('{"githubToken":"abc"}')).toBe('{"githubToken":"[REDACTED]"}');
+    expect(redactSecrets('{"llmApiKey":"abc"}')).toBe('{"llmApiKey":"[REDACTED]"}');
+    expect(redactSecrets('{"headers":{"authorization":"Bearer abc"}}')).toBe(
+      '{"headers":{"authorization":"[REDACTED]"}}',
+    );
+  });
+
   it("builds top-level redacted json api error responses", async () => {
     const response = jsonError(
       createApiError("LLM_UNAUTHORIZED", "Rejected", { apiKey: "sk-secret" }, 401),
@@ -44,5 +53,11 @@ describe("api errors", () => {
       details: { apiKey: "[REDACTED]" },
     });
     expect(response.status).toBe(401);
+  });
+
+  it("does not couple error helpers to next/server", () => {
+    const source = readFileSync("lib/errors.ts", "utf8");
+
+    expect(source).not.toContain("next/server");
   });
 });

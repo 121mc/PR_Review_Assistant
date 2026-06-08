@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import type { ApiError } from "./types";
 
 const REDACTED = "[REDACTED]";
@@ -37,7 +36,7 @@ export function jsonError(error: unknown, fallbackCode: string, fallbackStatus: 
     ...(apiError.details === undefined ? {} : { details: redactSecrets(apiError.details) as Record<string, unknown> }),
   };
 
-  return NextResponse.json(bodyError, { status: apiError.status ?? fallbackStatus });
+  return Response.json(bodyError, { status: apiError.status ?? fallbackStatus });
 }
 
 function normalizeApiError(error: unknown, fallbackCode: string, fallbackStatus: number): ApiError {
@@ -103,7 +102,7 @@ function redactValue(value: unknown, seen: WeakSet<object>): unknown {
 
 function redactString(value: string): string {
   const redactedJsonLikeFields = value.replace(
-    /(["'](?:authorization|api[-_]?key|token|secret|password)["']\s*:\s*)["'][^"']*["']/gi,
+    /(["'][^"']*(?:authorization|api[-_]?key|token|secret|password)[^"']*["']\s*:\s*)["'][^"']*["']/gi,
     `$1"${REDACTED}"`,
   );
 
