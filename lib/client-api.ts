@@ -95,11 +95,11 @@ export async function publishReviewCommentWithApi(input: {
     repo: input.repo,
   });
 
-  if (!isRecord(body) || !isString(body.commentUrl)) {
+  if (!isRecord(body) || !isString(body.commentUrl) || !isGitHubCommentUrl(body.commentUrl)) {
     throw new ClientApiError("评论发布响应无效", "GITHUB_RESPONSE_INVALID");
   }
 
-  return { commentUrl: body.commentUrl };
+  return { commentUrl: body.commentUrl.trim() };
 }
 
 async function postJson(endpoint: string, body: Record<string, unknown>): Promise<unknown> {
@@ -213,6 +213,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isGitHubCommentUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return false;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" && url.hostname === "github.com" && url.pathname !== "/";
+  } catch {
+    return false;
+  }
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

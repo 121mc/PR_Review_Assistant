@@ -39,15 +39,15 @@ export function ReviewDraft({ draft, githubToken, owner, persisted, pullNumber, 
       return;
     }
 
-    const confirmed = window.confirm("确认发布这条评论到 GitHub PR？");
-    if (!confirmed) {
-      return;
-    }
-
-    setPublishing(true);
     setStatus(null);
 
     try {
+      const confirmed = window.confirm("确认发布这条评论到 GitHub PR？");
+      if (!confirmed) {
+        return;
+      }
+
+      setPublishing(true);
       const result = await publishReviewCommentWithApi({
         body: draft.body,
         githubToken,

@@ -164,6 +164,42 @@ describe("report rendering and review comment publishing", () => {
     expectDraftValue(validReport.reviewComment);
   });
 
+  it.each([
+    ["empty", ""],
+    ["unsafe scheme", "javascript:alert(1)"],
+  ])("rejects a %s GitHub comment URL response", async (_label, commentUrl) => {
+    const { user } = await renderAnalyzedReport({
+      commentResponse: jsonResponse({ commentUrl }),
+      confirmPublish: true,
+    });
+
+    await user.click(screen.getByRole("button", { name: "发布评论" }));
+
+    expect(await screen.findByText("评论发布响应无效")).toBeInTheDocument();
+    expect(screen.queryByText("评论已发布")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "查看 GitHub 评论" })).not.toBeInTheDocument();
+    expectDraftValue(validReport.reviewComment);
+  });
+
+  it("shows a controlled error and does not call the comment API when confirmation throws", async () => {
+    const { confirmMock, fetchMock, user } = await renderAnalyzedReport({
+      confirmPublish: () => {
+        throw new Error("confirm unavailable");
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "发布评论" }));
+
+    expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("confirm unavailable")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/github/comment",
+      expect.anything(),
+    );
+    expect(screen.queryByText("评论已发布")).not.toBeInTheDocument();
+    expectDraftValue(validReport.reviewComment);
+  });
+
   it("keeps the generated report and draft in memory when history save fails", async () => {
     storageMocks.useSaveHistoryRecordMock = true;
     storageMocks.saveHistoryRecord.mockRejectedValue(new Error("IndexedDB failed"));
@@ -184,12 +220,14 @@ async function renderAnalyzedReport({
   report = validReport,
 }: {
   commentResponse?: Response;
-  confirmPublish?: boolean;
+  confirmPublish?: boolean | (() => boolean);
   report?: AnalysisReport;
 } = {}) {
   const user = userEvent.setup();
   const clipboardWrite = stubClipboard();
-  const confirmMock = vi.fn(() => confirmPublish);
+  const confirmMock = vi.fn(
+    typeof confirmPublish === "function" ? confirmPublish : () => confirmPublish,
+  );
   vi.stubGlobal("confirm", confirmMock);
   saveAppConfig(completeConfig);
   const fetchMock = stubFetch(async (endpoint) => {
