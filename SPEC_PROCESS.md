@@ -327,6 +327,10 @@ AI 给出最近 10 条、最近 30 条、只保存摘要等选项。用户回答
 
 这次验证暴露出一个事实：原计划对“功能怎么做”已经足够细，但对现代 Next.js、LLM provider 兼容性、测试环境 polyfill 和 XSS 这类执行期陷阱描述还不够硬。`antigravity：gemini-3.5-flash-high` 的冷启动尝试起到了外部审稿作用，`codex：gpt-5.5-high` 则负责把这些问题沉淀回正式 spec 和 plan。
 
+随后，用户让 `antigravity：claude-sonnet-4.6-thinking` 执行 Task 3 和 Task 6。该模型提出了一个计划结构层面的澄清问题：plan 没有明确指定 Next.js 项目应该放在仓库根目录 `D:\AI4SE_PROJECT\`，还是另建一个子目录，例如 `D:\AI4SE_PROJECT\app\`。这个问题成立，因为 plan 中大量路径使用 `app/`，而 `app/` 在 Next.js 中既可能被误解为项目目录，也可能是 App Router 的路由目录。
+
+处理决策：`codex：gpt-5.5-high` 明确项目根目录应为 `D:\AI4SE_PROJECT`，`app/` 只是该根项目下的 Next.js App Router 目录，不应创建嵌套项目 `D:\AI4SE_PROJECT\app\package.json`。随后将该约定补入 implementation plan 的 `Project Root` 小节，作为后续 subagent 执行 Task 3、Task 6 以及其他任务时的统一路径基准。
+
 ## 对 Superpowers brainstorming 的反思
 
 ### 做得好的地方
