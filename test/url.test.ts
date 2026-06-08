@@ -39,11 +39,27 @@ describe("parseGitHubUrl", () => {
     expect(() => parseGitHubUrl("https://github.com/octo/repo/pull/not-a-number")).toThrow(/unsupported/i);
   });
 
+  it("rejects internal duplicate slashes", () => {
+    expect(() => parseGitHubUrl("https://github.com/octo//repo")).toThrow(/unsupported/i);
+    expect(() => parseGitHubUrl("https://github.com/octo/repo//pull/42")).toThrow(/unsupported/i);
+    expect(() => parseGitHubUrl("https://github.com/octo/repo/pull//42")).toThrow(/unsupported/i);
+  });
+
+  it("rejects unsafe integer pull request numbers", () => {
+    expect(() => parseGitHubUrl("https://github.com/octo/repo/pull/9007199254740993")).toThrow(/unsupported/i);
+  });
+
+  it("rejects zero pull request numbers", () => {
+    expect(() => parseGitHubUrl("https://github.com/octo/repo/pull/0")).toThrow(/unsupported/i);
+  });
+
   it("rejects non github urls", () => {
     expect(() => parseGitHubUrl("https://example.com/octo/repo")).toThrow(/github/i);
   });
 
   it("rejects missing owner or repo", () => {
+    expect(() => parseGitHubUrl("https://github.com//repo")).toThrow(/unsupported/i);
+    expect(() => parseGitHubUrl("https://github.com//repo/pull/42")).toThrow(/unsupported/i);
     expect(() => parseGitHubUrl("https://github.com/octo")).toThrow(/unsupported/i);
     expect(() => parseGitHubUrl("https://github.com/")).toThrow(/unsupported/i);
   });
