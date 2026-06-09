@@ -86,6 +86,39 @@ describe("GitHubClient", () => {
     expect(pulls.at(-1)).toMatchObject({ number: 101, title: "Final PR" });
   });
 
+  it("normalizes fork head repository and SHA from pull request details", async () => {
+    useMswHandlers(
+      http.get(githubApiUrl("/repos/octo/repo/pulls/42"), () =>
+        HttpResponse.json(
+          githubPullResponse({
+            number: 42,
+            head: {
+              ref: "feature-branch",
+              sha: "abc123forksha",
+              repo: {
+                name: "forked-repo",
+                html_url: "https://github.com/forker/forked-repo",
+                owner: { login: "forker" },
+              },
+            },
+          }),
+        ),
+      ),
+    );
+
+    const detail = await new GitHubClient("ghp_test").getPullDetail("octo", "repo", 42);
+
+    expect(detail.summary).toMatchObject({
+      headRef: "feature-branch",
+      headSha: "abc123forksha",
+      headRepository: {
+        owner: "forker",
+        repo: "forked-repo",
+        url: "https://github.com/forker/forked-repo",
+      },
+    });
+  });
+
   it("publishes an issue comment for a pull request", async () => {
     useMswHandlers(
       http.post(githubApiUrl("/repos/octo/repo/issues/42/comments"), async ({ request }) => {

@@ -19,7 +19,15 @@ interface GitHubPullResponse {
   user?: { login?: string | null } | null;
   state: string;
   base?: { ref?: string | null } | null;
-  head?: { ref?: string | null } | null;
+  head?: {
+    ref?: string | null;
+    sha?: string | null;
+    repo?: {
+      name?: string | null;
+      html_url?: string | null;
+      owner?: { login?: string | null } | null;
+    } | null;
+  } | null;
   updated_at: string;
   html_url: string;
   body?: string | null;
@@ -43,6 +51,11 @@ interface GitHubChangedFileResponse {
 interface GitHubContentResponse {
   content?: string;
   encoding?: string;
+}
+
+interface GitHubDirectoryContentResponse {
+  path?: string;
+  type?: string;
 }
 
 interface GitHubCommentResponse {
@@ -124,6 +137,27 @@ export class GitHubClient {
     return decodeTextContent(payload.content);
   }
 
+  async listDirectoryFilePaths(owner: string, repo: string, path: string, ref: string): Promise<string[]> {
+    const response = await fetch(
+      `${GITHUB_API_BASE_URL}/repos/${encodeSegment(owner)}/${encodeSegment(repo)}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`,
+      { headers: this.buildHeaders() },
+    );
+
+    if (response.status === 404) {
+      return [];
+    }
+    await this.throwIfNotOk(response, "GITHUB_REPO_NOT_FOUND", "read");
+
+    const payload = (await response.json()) as GitHubContentResponse | GitHubDirectoryContentResponse[];
+    if (!Array.isArray(payload)) {
+      return [];
+    }
+
+    return payload
+      .filter((item) => item.type === "file" && typeof item.path === "string")
+      .map((item) => item.path as string);
+  }
+
   async createPullComment(
     owner: string,
     repo: string,
@@ -179,6 +213,8 @@ export class GitHubClient {
 }
 
 function normalizePullSummary(pull: GitHubPullResponse, owner: string, repo: string): PullRequestSummary {
+  const headRepository = normalizeHeadRepository(pull);
+
   return {
     owner,
     repo,
@@ -188,8 +224,26 @@ function normalizePullSummary(pull: GitHubPullResponse, owner: string, repo: str
     state: pull.state === "closed" ? "closed" : "open",
     baseRef: pull.base?.ref ?? "",
     headRef: pull.head?.ref ?? "",
+    ...(pull.head?.sha ? { headSha: pull.head.sha } : {}),
+    ...(headRepository === undefined ? {} : { headRepository }),
     updatedAt: pull.updated_at,
     url: pull.html_url,
+  };
+}
+
+function normalizeHeadRepository(pull: GitHubPullResponse): PullRequestSummary["headRepository"] {
+  const headRepo = pull.head?.repo;
+  const headOwner = headRepo?.owner?.login;
+  const headName = headRepo?.name;
+
+  if (!headOwner || !headName) {
+    return undefined;
+  }
+
+  return {
+    owner: headOwner,
+    repo: headName,
+    url: headRepo.html_url ?? `https://github.com/${headOwner}/${headName}`,
   };
 }
 
