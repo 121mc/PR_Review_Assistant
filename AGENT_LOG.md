@@ -32,3 +32,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries; completion commit(s): `87094ee1`, `c7278628`; branch: `codex/task-3-url-parser`; worktree: `.worktrees/task-3-url-parser`.
 - **Human intervention:** Codex tightened unsafe integer and zero PR-number handling after review.
 - **Lesson learned:** URL parsers need explicit negative tests, not only happy-path examples.
+
+## 2026-06-09T00:22:43+08:00 - Task 4: GitHub client, PR routes, and comment publishing
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `systematic-debugging`.
+- **Key prompt / context:** Build GitHub REST client and API routes for open PRs, PR detail, changed files, file contents, directories, and issue-comment publishing.
+- **Subagent output:** codex/task-4-github implementation agent; completion commit(s): `b6f9c5f5`, `8ea341bd`; branch: `codex/task-4-github`; worktree: `.worktrees/task-4-github`.
+- **Human intervention:** Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments.
+- **Lesson learned:** Map GitHub 404/403 carefully because private repositories can look missing when scopes are wrong.

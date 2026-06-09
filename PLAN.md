@@ -19,7 +19,7 @@
 | Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
 | Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
 | Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
-| Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
+| Task 4 | Done | `.worktrees/task-4-github` | `codex/task-4-github` | `b6f9c5f5`, `8ea341bd` | codex/task-4-github implementation agent | Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments. |
 | Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
 | Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
 | Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
@@ -558,7 +558,7 @@ git commit -m "feat: parse github links"
 - Every GitHub API route exports `dynamic = "force-dynamic"`.
 - Every GitHub API route wraps logic in try/catch and returns only secret-redacted structured errors.
 
-- [ ] **Step 1: Write failing GitHub client tests**
+- [x] **Step 1: Write failing GitHub client tests**
 
 Create `test/github-client.test.ts`:
 
@@ -693,13 +693,13 @@ function jsonRequest(body: unknown) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/github-client.test.ts`
 
 Expected: FAIL because `lib/github.ts` does not exist.
 
-- [ ] **Step 3: Implement GitHub client and routes**
+- [x] **Step 3: Implement GitHub client and routes**
 
 Implement class signatures:
 
@@ -728,7 +728,7 @@ Each route catch block must use the shared redaction helper before returning an 
 }
 ```
 
-- [ ] **Step 4: Run GitHub route verification**
+- [x] **Step 4: Run GitHub route verification**
 
 Run:
 
@@ -739,7 +739,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/github.ts app/api/github/pulls/route.ts app/api/github/pull-detail/route.ts app/api/github/comment/route.ts test/github-client.test.ts test/api-github-routes.test.ts test/msw
