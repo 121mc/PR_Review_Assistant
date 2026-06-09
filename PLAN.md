@@ -25,7 +25,7 @@
 | Task 7 | Done | `.worktrees/task-7-storage` | `codex/task-7-storage` | `2e140c96`, `cae486b1` | codex/task-7-storage implementation agent | Codex hardened storage helpers for unavailable browser APIs and quota-style failures. |
 | Task 8 | Done | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | `4d89931e` | codex/task-8-analyze implementation agent | Codex kept /api/github/pull-detail separate from context collection and routed context ownership into /api/analyze. |
 | Task 9 | Done | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | `60d3b50b`, `e23a8a81` | codex/task-9-dashboard implementation agent | Codex hardened storage error UI and made mounted-state behavior explicit in tests. |
-| Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
+| Task 10 | Done | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | `01ec8701`, `2b21d726`, `b56d1d90` | codex/task-10-pr-flow implementation agent | Codex fixed recoverable error-state transitions and refreshed history after successful analysis. |
 | Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
 | Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
 | Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
@@ -1533,7 +1533,7 @@ git commit -m "feat: add local dashboard shell"
   - Any state -> `error` when a parse, GitHub, LLM, validation, or storage operation fails.
   - `error` -> previous recoverable state when the user edits the URL, updates config, chooses another PR, or clicks retry. Keep the last valid PR selection when the error came from analysis or comment publishing; reset to `idle` when the error came from URL parsing.
 
-- [ ] **Step 1: Write failing PR flow tests**
+- [x] **Step 1: Write failing PR flow tests**
 
 Create `test/ui-pr-flow.test.tsx`:
 
@@ -1596,13 +1596,13 @@ function jsonResponse(body: unknown) {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/ui-pr-flow.test.tsx`
 
 Expected: FAIL because PR flow is not wired.
 
-- [ ] **Step 3: Implement client API and PR flow components**
+- [x] **Step 3: Implement client API and PR flow components**
 
 Implement `lib/client-api.ts` functions:
 
@@ -1616,7 +1616,7 @@ export async function analyzePullRequest(input: AnalyzeRequest) {}
 
 Wire `app/page.tsx` states: `idle`, `repoLoaded`, `prReady`, `analyzing`, `done`, `error`.
 
-- [ ] **Step 4: Run PR flow verification**
+- [x] **Step 4: Run PR flow verification**
 
 Run:
 
@@ -1627,7 +1627,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/page.tsx components/PullRequestPicker.tsx components/PullRequestSummary.tsx components/AnalysisProgress.tsx lib/client-api.ts test/ui-pr-flow.test.tsx

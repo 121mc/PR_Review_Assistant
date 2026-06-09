@@ -9,7 +9,11 @@ import {
 } from "../lib/storage";
 import type { HistoryRecord } from "../lib/types";
 
-export function HistoryPanel() {
+interface HistoryPanelProps {
+  refreshKey?: number;
+}
+
+export function HistoryPanel({ refreshKey = 0 }: HistoryPanelProps = {}) {
   const [mounted, setMounted] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [records, setRecords] = useState<HistoryRecord[]>([]);
@@ -46,7 +50,7 @@ export function HistoryPanel() {
       cancelled = true;
       activeRef.current = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   async function handleDelete(record: HistoryRecord) {
     setError(null);
