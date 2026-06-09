@@ -172,6 +172,19 @@ export default function HomePage() {
     setFlowStatus("prReady");
   }
 
+  function handleHistoryOpen(record: HistoryRecord) {
+    setRepository(record.repository);
+    setPullRequests([]);
+    setSelectedPullRequest(record.pullRequest);
+    setReport(record.report);
+    setReviewDraft(record.reviewDraft);
+    setHistoryPersisted(true);
+    setAnalysisStage("saving-history");
+    setErrorMessage(null);
+    setErrorSource(null);
+    setFlowStatus("done");
+  }
+
   function clearGeneratedAnalysis() {
     setReport(null);
     setReviewDraft(null);
@@ -255,6 +268,7 @@ export default function HomePage() {
               <ReviewDraft
                 draft={reviewDraft}
                 githubToken={config.githubToken}
+                key={reviewDraft.sourceReportId}
                 owner={selectedSummary.owner}
                 persisted={historyPersisted}
                 pullNumber={selectedSummary.number}
@@ -296,7 +310,7 @@ export default function HomePage() {
           </div>
 
           <aside>
-            <HistoryPanel refreshKey={historyRefreshKey} />
+            <HistoryPanel onOpen={handleHistoryOpen} refreshKey={historyRefreshKey} />
           </aside>
         </div>
       </div>
