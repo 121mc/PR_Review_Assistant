@@ -27,6 +27,26 @@
 | Task 9 | Done | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | `60d3b50b`, `e23a8a81` | codex/task-9-dashboard implementation agent | Codex hardened storage error UI and made mounted-state behavior explicit in tests. |
 | Task 10 | Done | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | `01ec8701`, `2b21d726`, `b56d1d90` | codex/task-10-pr-flow implementation agent | Codex fixed recoverable error-state transitions and refreshed history after successful analysis. |
 | Task 11 | Done | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | `7dffc195`, `8406e0f7`, `a55fe6f0` | codex/task-11-report-comment implementation agent | Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests. |
+| Task 12 | Done | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | `f27c9bd9` | codex/task-12-final-polish implementation agent | Codex verified npm test, typecheck, lint, and build before considering the baseline done. |
+| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
+## Completion Ledger
+
+> This ledger is updated in each task PR. A task is checked only after its worktree branch has a completion commit and verification evidence. Merge hashes are recorded in PR history; task completion commits are listed here for stable local traceability.
+
+| Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
+| --- | --- | --- | --- | --- | --- | --- |
+| Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
+| Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
+| Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
+| Task 4 | Done | `.worktrees/task-4-github` | `codex/task-4-github` | `b6f9c5f5`, `8ea341bd` | codex/task-4-github implementation agent | Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments. |
+| Task 5 | Done | `.worktrees/task-5-llm` | `codex/task-5-llm` | `cb11f72e`, `1840a4dd` | codex/task-5-llm implementation agent | Codex structured invalid-provider responses and added response_format fallback behavior. |
+| Task 6 | Done | `.worktrees/task-6-context` | `codex/task-6-context` | `ef1cc90a`, `72a780d6`, `1b1282c7`, `8482b17a`, `6c3264cd` | codex/task-6-context implementation agent; Claude review called out context ownership and fake-client gaps | Codex repeatedly adjusted budget priority, head refs, overflow notes, and fake-client coverage. |
+| Task 7 | Done | `.worktrees/task-7-storage` | `codex/task-7-storage` | `2e140c96`, `cae486b1` | codex/task-7-storage implementation agent | Codex hardened storage helpers for unavailable browser APIs and quota-style failures. |
+| Task 8 | Done | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | `4d89931e` | codex/task-8-analyze implementation agent | Codex kept /api/github/pull-detail separate from context collection and routed context ownership into /api/analyze. |
+| Task 9 | Done | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | `60d3b50b`, `e23a8a81` | codex/task-9-dashboard implementation agent | Codex hardened storage error UI and made mounted-state behavior explicit in tests. |
+| Task 10 | Done | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | `01ec8701`, `2b21d726`, `b56d1d90` | codex/task-10-pr-flow implementation agent | Codex fixed recoverable error-state transitions and refreshed history after successful analysis. |
+| Task 11 | Done | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | `7dffc195`, `8406e0f7`, `a55fe6f0` | codex/task-11-report-comment implementation agent | Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests. |
 | Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
 | Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
 | Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
@@ -2027,7 +2047,7 @@ git commit -m "feat: render reports and publish comments"
   - statement that UI is Chinese and generated review is English
 - Run all tests, typecheck, lint, and build.
 
-- [ ] **Step 1: Write failing happy-path test**
+- [x] **Step 1: Write failing happy-path test**
 
 Create `test/happy-path.test.tsx`:
 
@@ -2099,13 +2119,13 @@ function pullSummary() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails if integration is incomplete**
+- [x] **Step 2: Run test to verify it fails if integration is incomplete**
 
 Run: `npm test -- test/happy-path.test.tsx`
 
 Expected before fixes: FAIL if any integration edge is missing. Expected after fixes: PASS.
 
-- [ ] **Step 3: Update README**
+- [x] **Step 3: Update README**
 
 Include this minimum README structure:
 
@@ -2149,7 +2169,7 @@ Do not deploy version one to an untrusted public server. The browser sends secre
 The UI is Chinese. Generated analysis reports and GitHub comments are English.
 ````
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 
@@ -2162,7 +2182,7 @@ npm run build
 
 Expected: all commands pass.
 
-- [ ] **Step 5: Manual local smoke test**
+- [x] **Step 5: Manual local smoke test**
 
 Run:
 
@@ -2178,7 +2198,7 @@ Open `http://localhost:3000` in the browser. Verify:
 - PR URL path can reach analysis-ready state.
 - Report page does not overlap or resize awkwardly at desktop width.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add test/happy-path.test.tsx README.md .
@@ -2187,28 +2207,28 @@ git commit -m "test: add end-to-end pr review flow"
 
 ## Final Acceptance Checklist
 
-- [ ] Repository URL lists open PRs.
-- [ ] PR URL goes directly to PR-ready state.
-- [ ] Missing config blocks analysis with Chinese messages.
-- [ ] GitHub token and LLM API key never appear in logs, UI errors, or history.
-- [ ] API routes export `dynamic = "force-dynamic"` and return only redacted structured errors.
-- [ ] Settings/history components read localStorage and IndexedDB only after client mount.
-- [ ] Analysis report has six fixed dimensions plus overall score.
-- [ ] Every score is 0-10 and higher means more acceptable.
-- [ ] Overall score is model-generated but explained against the six sub-scores.
-- [ ] LLM client falls back when a provider rejects `response_format`.
-- [ ] Report body and review draft are English.
-- [ ] Markdown rendering skips or sanitizes raw HTML.
-- [ ] UI labels and workflow are Chinese.
-- [ ] User must confirm before publishing a single PR comment.
-- [ ] Failed publishing keeps the draft copyable.
-- [ ] Full analysis history persists in IndexedDB with no automatic limit.
-- [ ] Single-record delete and clear-all history controls work.
-- [ ] Large or truncated context displays a truncation notice.
-- [ ] `npm test` passes.
-- [ ] `npm run typecheck` passes.
-- [ ] `npm run lint` passes.
-- [ ] `npm run build` passes.
+- [x] Repository URL lists open PRs.
+- [x] PR URL goes directly to PR-ready state.
+- [x] Missing config blocks analysis with Chinese messages.
+- [x] GitHub token and LLM API key never appear in logs, UI errors, or history.
+- [x] API routes export `dynamic = "force-dynamic"` and return only redacted structured errors.
+- [x] Settings/history components read localStorage and IndexedDB only after client mount.
+- [x] Analysis report has six fixed dimensions plus overall score.
+- [x] Every score is 0-10 and higher means more acceptable.
+- [x] Overall score is model-generated but explained against the six sub-scores.
+- [x] LLM client falls back when a provider rejects `response_format`.
+- [x] Report body and review draft are English.
+- [x] Markdown rendering skips or sanitizes raw HTML.
+- [x] UI labels and workflow are Chinese.
+- [x] User must confirm before publishing a single PR comment.
+- [x] Failed publishing keeps the draft copyable.
+- [x] Full analysis history persists in IndexedDB with no automatic limit.
+- [x] Single-record delete and clear-all history controls work.
+- [x] Large or truncated context displays a truncation notice.
+- [x] `npm test` passes.
+- [x] `npm run typecheck` passes.
+- [x] `npm run lint` passes.
+- [x] `npm run build` passes.
 
 ## Self-Review Notes
 
