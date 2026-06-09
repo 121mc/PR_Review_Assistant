@@ -20,6 +20,26 @@
 | Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
 | Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
 | Task 4 | Done | `.worktrees/task-4-github` | `codex/task-4-github` | `b6f9c5f5`, `8ea341bd` | codex/task-4-github implementation agent | Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments. |
+| Task 5 | Done | `.worktrees/task-5-llm` | `codex/task-5-llm` | `cb11f72e`, `1840a4dd` | codex/task-5-llm implementation agent | Codex structured invalid-provider responses and added response_format fallback behavior. |
+| Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
+| Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
+| Task 8 | Pending | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | - | - | - |
+| Task 9 | Pending | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | - | - | - |
+| Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
+| Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
+| Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
+| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
+## Completion Ledger
+
+> This ledger is updated in each task PR. A task is checked only after its worktree branch has a completion commit and verification evidence. Merge hashes are recorded in PR history; task completion commits are listed here for stable local traceability.
+
+| Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
+| --- | --- | --- | --- | --- | --- | --- |
+| Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
+| Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
+| Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
+| Task 4 | Done | `.worktrees/task-4-github` | `codex/task-4-github` | `b6f9c5f5`, `8ea341bd` | codex/task-4-github implementation agent | Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments. |
 | Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
 | Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
 | Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
@@ -832,7 +852,7 @@ git commit -m "feat: add github api integration"
 - Retry once when JSON parsing or `parseAnalysisReport` fails.
 - Map HTTP 401 to `LLM_UNAUTHORIZED`, 404 to `LLM_MODEL_NOT_FOUND`, timeout to `LLM_TIMEOUT`, invalid JSON after retry to `LLM_INVALID_JSON`.
 
-- [ ] **Step 1: Write failing LLM tests**
+- [x] **Step 1: Write failing LLM tests**
 
 Create `test/llm-client.test.ts`:
 
@@ -956,13 +976,13 @@ function minimalAnalysisContext() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/llm-client.test.ts`
 
 Expected: FAIL because `lib/llm.ts` does not exist.
 
-- [ ] **Step 3: Implement LLM client**
+- [x] **Step 3: Implement LLM client**
 
 Implement signature:
 
@@ -980,7 +1000,7 @@ export async function analyzeWithLlm(input: {
 
 Use `AbortSignal.timeout(60000)` for the request timeout.
 
-- [ ] **Step 4: Run LLM verification**
+- [x] **Step 4: Run LLM verification**
 
 Run:
 
@@ -991,7 +1011,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/llm.ts test/llm-client.test.ts test/msw/handlers.ts

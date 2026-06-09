@@ -40,3 +40,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-4-github implementation agent; completion commit(s): `b6f9c5f5`, `8ea341bd`; branch: `codex/task-4-github`; worktree: `.worktrees/task-4-github`.
 - **Human intervention:** Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments.
 - **Lesson learned:** Map GitHub 404/403 carefully because private repositories can look missing when scopes are wrong.
+
+## 2026-06-09T00:22:51+08:00 - Task 5: OpenAI-compatible LLM client and prompt contract
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `systematic-debugging`.
+- **Key prompt / context:** Call an OpenAI-compatible chat completions API, request JSON, validate against the report schema, and retry when needed.
+- **Subagent output:** codex/task-5-llm implementation agent; completion commit(s): `cb11f72e`, `1840a4dd`; branch: `codex/task-5-llm`; worktree: `.worktrees/task-5-llm`.
+- **Human intervention:** Codex structured invalid-provider responses and added response_format fallback behavior.
+- **Lesson learned:** Provider compatibility needs graceful fallback around response_format and malformed JSON.
