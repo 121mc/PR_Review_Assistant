@@ -24,3 +24,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints; completion commit(s): `58a957e5`, `a8191d6c`, `9da84ad5`; branch: `codex/task-2-contracts`; worktree: `.worktrees/task-2-contracts`.
 - **Human intervention:** Codex hardened secret redaction and decoupled error helpers from Next server-only APIs.
 - **Lesson learned:** Keep contracts framework-light so tests can exercise them outside App Router.
+
+## 2026-06-08T23:28:28+08:00 - Task 3: GitHub URL parser and parse API
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `systematic-debugging`.
+- **Key prompt / context:** Parse GitHub repository and pull-request URLs while rejecting issues, commits, unsafe numbers, and non-GitHub hosts.
+- **Subagent output:** codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries; completion commit(s): `87094ee1`, `c7278628`; branch: `codex/task-3-url-parser`; worktree: `.worktrees/task-3-url-parser`.
+- **Human intervention:** Codex tightened unsafe integer and zero PR-number handling after review.
+- **Lesson learned:** URL parsers need explicit negative tests, not only happy-path examples.

@@ -18,7 +18,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
 | Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
-| Task 3 | Pending | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | - | - | - |
+| Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
 | Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
 | Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
 | Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
@@ -412,7 +412,7 @@ git commit -m "feat: add shared report contracts"
 - Reject issue URLs, commit URLs, non-GitHub hosts, missing owner/repo, and non-numeric PR numbers.
 - Return `type: "repo"` or `type: "pull"`.
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Create `test/url.test.ts`:
 
@@ -473,13 +473,13 @@ describe("POST /api/github/parse-url", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/url.test.ts test/api-parse-url.test.ts`
 
 Expected: FAIL because parser and API route do not exist.
 
-- [ ] **Step 3: Implement parser and route**
+- [x] **Step 3: Implement parser and route**
 
 Create parser signature:
 
@@ -506,7 +506,7 @@ export function parseGitHubUrl(rawUrl: string): ParsedGitHubUrl {
 
 Create route that reads JSON `{ url }`, calls parser, returns 200, and returns 400 with `INVALID_GITHUB_URL` or `UNSUPPORTED_GITHUB_URL` on failure.
 
-- [ ] **Step 4: Run parser verification**
+- [x] **Step 4: Run parser verification**
 
 Run:
 
@@ -517,7 +517,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/url.ts app/api/github/parse-url/route.ts test/url.test.ts test/api-parse-url.test.ts
