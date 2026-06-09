@@ -96,3 +96,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-11-report-comment implementation agent; completion commit(s): `7dffc195`, `8406e0f7`, `a55fe6f0`; branch: `codex/task-11-report-comment`; worktree: `.worktrees/task-11-report-comment`.
 - **Human intervention:** Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests.
 - **Lesson learned:** LLM Markdown and provider-returned URLs are untrusted output and need validation/sanitization.
+
+## 2026-06-09T03:58:24+08:00 - Task 12: Mocked E2E test, README, and final verification
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `requesting-code-review`.
+- **Key prompt / context:** Add a full mocked happy-path test, update README, and run full verification commands.
+- **Subagent output:** codex/task-12-final-polish implementation agent; completion commit(s): `f27c9bd9`; branch: `codex/task-12-final-polish`; worktree: `.worktrees/task-12-final-polish`.
+- **Human intervention:** Codex verified npm test, typecheck, lint, and build before considering the baseline done.
+- **Lesson learned:** A mocked end-to-end path is useful course evidence when real tokens and API keys cannot be shared.
