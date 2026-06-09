@@ -21,8 +21,8 @@
 | Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
 | Task 4 | Done | `.worktrees/task-4-github` | `codex/task-4-github` | `b6f9c5f5`, `8ea341bd` | codex/task-4-github implementation agent | Codex hardened pagination, head-repository normalization, token-scope error mapping, and route comments. |
 | Task 5 | Done | `.worktrees/task-5-llm` | `codex/task-5-llm` | `cb11f72e`, `1840a4dd` | codex/task-5-llm implementation agent | Codex structured invalid-provider responses and added response_format fallback behavior. |
-| Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
-| Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
+| Task 6 | Done | `.worktrees/task-6-context` | `codex/task-6-context` | `ef1cc90a`, `72a780d6`, `1b1282c7`, `8482b17a`, `6c3264cd` | codex/task-6-context implementation agent; Claude review called out context ownership and fake-client gaps | Codex repeatedly adjusted budget priority, head refs, overflow notes, and fake-client coverage. |
+| Task 7 | Done | `.worktrees/task-7-storage` | `codex/task-7-storage` | `2e140c96`, `cae486b1` | codex/task-7-storage implementation agent | Codex hardened storage helpers for unavailable browser APIs and quota-style failures. |
 | Task 8 | Pending | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | - | - | - |
 | Task 9 | Pending | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | - | - | - |
 | Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
@@ -975,7 +975,7 @@ git commit -m "feat: add llm analysis client"
 - Skip binary files and files with no text content.
 - Mark each truncated file and the full context when truncation occurs.
 
-- [ ] **Step 1: Write failing context tests**
+- [x] **Step 1: Write failing context tests**
 
 Create `test/context.test.ts`:
 
@@ -1088,13 +1088,13 @@ function fakeGitHubClient(input: {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/context.test.ts`
 
 Expected: FAIL because `lib/context.ts` does not exist.
 
-- [ ] **Step 3: Implement context collector**
+- [x] **Step 3: Implement context collector**
 
 Implement signature:
 
@@ -1110,7 +1110,7 @@ export async function collectAnalysisContext(
 }
 ```
 
-- [ ] **Step 4: Run context verification**
+- [x] **Step 4: Run context verification**
 
 Run:
 
@@ -1121,7 +1121,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/context.ts test/context.test.ts lib/github.ts
@@ -1150,7 +1150,7 @@ git commit -m "feat: collect pull request context"
 - Keep history in IndexedDB database `pr-manager`, store `history`.
 - Reject history records that include secret-looking keys such as `githubToken`, `llmApiKey`, `apiKey`, or `authorization`.
 
-- [ ] **Step 1: Write failing storage tests**
+- [x] **Step 1: Write failing storage tests**
 
 Create `test/storage.test.ts`:
 
@@ -1204,17 +1204,17 @@ describe("storage", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/storage.test.ts`
 
 Expected: FAIL because `lib/storage.ts` does not exist.
 
-- [ ] **Step 3: Implement storage helpers**
+- [x] **Step 3: Implement storage helpers**
 
 Implement the named functions in `lib/storage.ts`. For tests, ensure Vitest setup provides an IndexedDB polyfill such as `fake-indexeddb` if jsdom does not provide it.
 
-- [ ] **Step 4: Run storage verification**
+- [x] **Step 4: Run storage verification**
 
 Run:
 
@@ -1225,7 +1225,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/storage.ts test/storage.test.ts vitest.setup.ts package.json package-lock.json

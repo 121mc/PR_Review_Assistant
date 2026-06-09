@@ -48,3 +48,19 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-5-llm implementation agent; completion commit(s): `cb11f72e`, `1840a4dd`; branch: `codex/task-5-llm`; worktree: `.worktrees/task-5-llm`.
 - **Human intervention:** Codex structured invalid-provider responses and added response_format fallback behavior.
 - **Lesson learned:** Provider compatibility needs graceful fallback around response_format and malformed JSON.
+
+## 2026-06-09T01:29:38+08:00 - Task 6: Language-aware context collector and truncation
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `systematic-debugging`.
+- **Key prompt / context:** Collect PR metadata, changed files, patches, repository convention files, language labels, and deterministic truncation notes under a fixed budget.
+- **Subagent output:** codex/task-6-context implementation agent; Claude review called out context ownership and fake-client gaps; completion commit(s): `ef1cc90a`, `72a780d6`, `1b1282c7`, `8482b17a`, `6c3264cd`; branch: `codex/task-6-context`; worktree: `.worktrees/task-6-context`.
+- **Human intervention:** Codex repeatedly adjusted budget priority, head refs, overflow notes, and fake-client coverage.
+- **Lesson learned:** Never build LLM context by blindly concatenating and slicing; allocate budget by evidence priority.
+
+## 2026-06-09T00:22:01+08:00 - Task 7: Browser configuration and IndexedDB history storage
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`.
+- **Key prompt / context:** Persist local app config in localStorage and full analysis history in IndexedDB without storing secrets in records.
+- **Subagent output:** codex/task-7-storage implementation agent; completion commit(s): `2e140c96`, `cae486b1`; branch: `codex/task-7-storage`; worktree: `.worktrees/task-7-storage`.
+- **Human intervention:** Codex hardened storage helpers for unavailable browser APIs and quota-style failures.
+- **Lesson learned:** Browser storage code must be mounted/client-only to avoid SSR and hydration hazards.
