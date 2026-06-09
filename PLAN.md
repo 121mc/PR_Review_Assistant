@@ -10,6 +10,26 @@
 
 ---
 
+## Completion Ledger
+
+> This ledger is updated in each task PR. A task is checked only after its worktree branch has a completion commit and verification evidence. Merge hashes are recorded in PR history; task completion commits are listed here for stable local traceability.
+
+| Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
+| --- | --- | --- | --- | --- | --- | --- |
+| Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
+| Task 2 | Pending | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | - | - | - |
+| Task 3 | Pending | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | - | - | - |
+| Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
+| Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
+| Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
+| Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
+| Task 8 | Pending | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | - | - | - |
+| Task 9 | Pending | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | - | - | - |
+| Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
+| Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
+| Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
+| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
 ## Source Spec
 
 Design spec: `docs/superpowers/specs/2026-06-08-pr-manager-design.md`
@@ -122,7 +142,7 @@ Create or modify these files:
 - Start `app/page.tsx` with a minimal Chinese landing state that says `PR 管理器`.
 - `GET /api/health` returns `{ ok: true }`.
 
-- [ ] **Step 1: Write the failing health test**
+- [x] **Step 1: Write the failing health test**
 
 Create `test/health.test.ts`:
 
@@ -138,13 +158,13 @@ describe("GET /api/health", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- test/health.test.ts`
 
 Expected: FAIL because `app/api/health/route.ts` does not exist yet.
 
-- [ ] **Step 3: Implement the scaffold and health route**
+- [x] **Step 3: Implement the scaffold and health route**
 
 Create `app/api/health/route.ts`:
 
@@ -189,7 +209,7 @@ Use this minimal `package.json` scripts block:
 }
 ```
 
-- [ ] **Step 4: Run scaffold verification**
+- [x] **Step 4: Run scaffold verification**
 
 Run:
 
@@ -202,7 +222,7 @@ npm run build
 
 Expected: all commands pass. `npm run build` renders the starter page and compiles the health route.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add package.json package-lock.json next.config.ts tsconfig.json vitest.config.ts vitest.setup.ts postcss.config.mjs tailwind.config.ts app test .gitignore README.md
