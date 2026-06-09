@@ -72,3 +72,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-8-analyze implementation agent; completion commit(s): `4d89931e`; branch: `codex/task-8-analyze`; worktree: `.worktrees/task-8-analyze`.
 - **Human intervention:** Codex kept /api/github/pull-detail separate from context collection and routed context ownership into /api/analyze.
 - **Lesson learned:** Keep preview endpoints light; expensive context collection belongs in the analyze action.
+
+## 2026-06-09T02:17:40+08:00 - Task 9: Chinese dashboard shell, settings, link input, and history panel
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`.
+- **Key prompt / context:** Build the Chinese local dashboard shell with settings persistence, link input, status surfaces, and local history controls.
+- **Subagent output:** codex/task-9-dashboard implementation agent; completion commit(s): `60d3b50b`, `e23a8a81`; branch: `codex/task-9-dashboard`; worktree: `.worktrees/task-9-dashboard`.
+- **Human intervention:** Codex hardened storage error UI and made mounted-state behavior explicit in tests.
+- **Lesson learned:** Client storage should load after mount and expose recoverable status text.
