@@ -10,10 +10,11 @@ import {
 import type { HistoryRecord } from "../lib/types";
 
 interface HistoryPanelProps {
+  onOpen?: (record: HistoryRecord) => void;
   refreshKey?: number;
 }
 
-export function HistoryPanel({ refreshKey = 0 }: HistoryPanelProps = {}) {
+export function HistoryPanel({ onOpen, refreshKey = 0 }: HistoryPanelProps = {}) {
   const [mounted, setMounted] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [records, setRecords] = useState<HistoryRecord[]>([]);
@@ -119,13 +120,13 @@ export function HistoryPanel({ refreshKey = 0 }: HistoryPanelProps = {}) {
           <ul aria-label="历史记录" className="divide-y divide-neutral-100" role="list">
             {records.map((record) => (
               <li className="flex items-start justify-between gap-4 py-3" key={record.id}>
-                <div className="min-w-0">
+                <button className="min-w-0 flex-1 text-left" onClick={() => onOpen?.(record)} type="button">
                   <p className="truncate text-sm font-medium text-neutral-950">{record.pullRequest.title}</p>
                   <p className="mt-1 text-xs text-neutral-500">
                     {record.repository.owner}/{record.repository.repo} #{record.pullRequest.number}
                   </p>
                   <p className="mt-1 text-xs text-neutral-500">{formatCreatedAt(record.createdAt)}</p>
-                </div>
+                </button>
                 <button
                   aria-label={`删除 ${record.repository.owner}/${record.repository.repo} #${record.pullRequest.number} ${record.pullRequest.title}`}
                   className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-500 transition hover:border-red-300 hover:text-red-700"
