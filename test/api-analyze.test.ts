@@ -119,6 +119,32 @@ describe("analyze API route", () => {
     expect(llmMocks.analyzeWithLlm).not.toHaveBeenCalled();
   });
 
+  it("returns a field-specific error for an invalid LLM base URL", async () => {
+    const response = await analyzePullRequest(
+      jsonRequest({
+        owner: "octo",
+        repo: "repo",
+        pullNumber: 42,
+        githubToken: "ghp_test",
+        llm: {
+          baseUrl: "not a url",
+          apiKey: "sk_test",
+          model: "reviewer",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "LLM Base URL must be a valid HTTP(S) URL.",
+      details: { invalid: ["llm.baseUrl"] },
+    });
+    expect(githubMocks.GitHubClient).not.toHaveBeenCalled();
+    expect(contextMocks.collectAnalysisContext).not.toHaveBeenCalled();
+    expect(llmMocks.analyzeWithLlm).not.toHaveBeenCalled();
+  });
+
   it("passes the GitHub client and collected context through the orchestration path", async () => {
     const response = await analyzePullRequest(
       jsonRequest({
