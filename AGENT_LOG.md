@@ -56,3 +56,19 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-6-context implementation agent; Claude review called out context ownership and fake-client gaps; completion commit(s): `ef1cc90a`, `72a780d6`, `1b1282c7`, `8482b17a`, `6c3264cd`; branch: `codex/task-6-context`; worktree: `.worktrees/task-6-context`.
 - **Human intervention:** Codex repeatedly adjusted budget priority, head refs, overflow notes, and fake-client coverage.
 - **Lesson learned:** Never build LLM context by blindly concatenating and slicing; allocate budget by evidence priority.
+
+## 2026-06-09T00:22:01+08:00 - Task 7: Browser configuration and IndexedDB history storage
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`.
+- **Key prompt / context:** Persist local app config in localStorage and full analysis history in IndexedDB without storing secrets in records.
+- **Subagent output:** codex/task-7-storage implementation agent; completion commit(s): `2e140c96`, `cae486b1`; branch: `codex/task-7-storage`; worktree: `.worktrees/task-7-storage`.
+- **Human intervention:** Codex hardened storage helpers for unavailable browser APIs and quota-style failures.
+- **Lesson learned:** Browser storage code must be mounted/client-only to avoid SSR and hydration hazards.
+
+## 2026-06-09T01:38:15+08:00 - Task 8: Analyze API orchestration
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`.
+- **Key prompt / context:** Validate config, collect GitHub context, call the LLM client, and return a schema-valid report from /api/analyze.
+- **Subagent output:** codex/task-8-analyze implementation agent; completion commit(s): `4d89931e`; branch: `codex/task-8-analyze`; worktree: `.worktrees/task-8-analyze`.
+- **Human intervention:** Codex kept /api/github/pull-detail separate from context collection and routed context ownership into /api/analyze.
+- **Lesson learned:** Keep preview endpoints light; expensive context collection belongs in the analyze action.
