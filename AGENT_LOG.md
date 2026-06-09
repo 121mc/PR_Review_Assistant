@@ -104,3 +104,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-12-final-polish implementation agent; completion commit(s): `f27c9bd9`; branch: `codex/task-12-final-polish`; worktree: `.worktrees/task-12-final-polish`.
 - **Human intervention:** Codex verified npm test, typecheck, lint, and build before considering the baseline done.
 - **Lesson learned:** A mocked end-to-end path is useful course evidence when real tokens and API keys cannot be shared.
+
+## 2026-06-09T09:11:15+08:00 - Task 13: History reopen hardening
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`.
+- **Key prompt / context:** Let saved history reports reopen into the main workspace with report, draft, and selected PR state restored.
+- **Subagent output:** codex/task-13-history-reopen hardening agent; completion commit(s): `8598d887`; branch: `codex/task-13-history-reopen`; worktree: `.worktrees/task-13-history-reopen`.
+- **Human intervention:** Codex added the post-plan hardening task after manual review of learner workflows.
+- **Lesson learned:** History is only useful if records can be reopened into the same working context.

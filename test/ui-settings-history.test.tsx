@@ -250,6 +250,27 @@ describe("dashboard shell", () => {
     expect(items[1]).toHaveTextContent("Older PR");
   });
 
+  it("reopens a saved history report from the history list", async () => {
+    const user = userEvent.setup();
+    await saveHistoryRecord(
+      historyRecord({
+        id: "record-reopen",
+        pullRequest: { ...historyRecord().pullRequest, title: "Reopen PR" },
+        reviewDraft: { body: validReport.reviewComment, sourceReportId: "record-reopen" },
+      }),
+    );
+
+    render(<HomePage />);
+
+    const recordTitle = await screen.findByText("Reopen PR");
+    expect(screen.queryByText("Overall Score")).not.toBeInTheDocument();
+
+    await user.click(recordTitle);
+
+    expect(await screen.findByText("Overall Score")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "评论草稿内容" })).toHaveValue(validReport.reviewComment);
+  });
+
   it("deletes one history record", async () => {
     const user = userEvent.setup();
     await saveHistoryRecord(

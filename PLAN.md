@@ -28,8 +28,14 @@
 | Task 10 | Done | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | `01ec8701`, `2b21d726`, `b56d1d90` | codex/task-10-pr-flow implementation agent | Codex fixed recoverable error-state transitions and refreshed history after successful analysis. |
 | Task 11 | Done | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | `7dffc195`, `8406e0f7`, `a55fe6f0` | codex/task-11-report-comment implementation agent | Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests. |
 | Task 12 | Done | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | `f27c9bd9` | codex/task-12-final-polish implementation agent | Codex verified npm test, typecheck, lint, and build before considering the baseline done. |
-| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 13 | Done | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | `8598d887` | codex/task-13-history-reopen hardening agent | Codex added the post-plan hardening task after manual review of learner workflows. |
 | Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
+## Post-Plan Hardening Tasks
+
+These tasks were added after the original twelve-task plan during final manual review and are tracked as separate worktree PRs.
+
+- [x] **Task 13: History reopen hardening** - worktree `.worktrees/task-13-history-reopen`, branch `codex/task-13-history-reopen`, commits `8598d887`.
+- [ ] **Task 14: LLM base URL validation hardening** - worktree `.worktrees/task-14-llm-base-url`, branch `codex/task-14-llm-base-url`, commits `4e337e59`.
 ## Source Spec
 
 Design spec: `docs/superpowers/specs/2026-06-08-pr-manager-design.md`
