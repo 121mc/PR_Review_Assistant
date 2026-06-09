@@ -17,6 +17,46 @@
 | Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
 | --- | --- | --- | --- | --- | --- | --- |
 | Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
+| Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
+| Task 3 | Done | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | `87094ee1`, `c7278628` | codex/task-3-url-parser implementation agent; Claude feedback clarified project root and URL boundaries | Codex tightened unsafe integer and zero PR-number handling after review. |
+| Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
+| Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
+| Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
+| Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
+| Task 8 | Pending | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | - | - | - |
+| Task 9 | Pending | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | - | - | - |
+| Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
+| Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
+| Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
+| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
+## Completion Ledger
+
+> This ledger is updated in each task PR. A task is checked only after its worktree branch has a completion commit and verification evidence. Merge hashes are recorded in PR history; task completion commits are listed here for stable local traceability.
+
+| Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
+| --- | --- | --- | --- | --- | --- | --- |
+| Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
+| Task 2 | Done | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | `58a957e5`, `a8191d6c`, `9da84ad5` | codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints | Codex hardened secret redaction and decoupled error helpers from Next server-only APIs. |
+| Task 3 | Pending | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | - | - | - |
+| Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
+| Task 5 | Pending | `.worktrees/task-5-llm` | `codex/task-5-llm` | - | - | - |
+| Task 6 | Pending | `.worktrees/task-6-context` | `codex/task-6-context` | - | - | - |
+| Task 7 | Pending | `.worktrees/task-7-storage` | `codex/task-7-storage` | - | - | - |
+| Task 8 | Pending | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | - | - | - |
+| Task 9 | Pending | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | - | - | - |
+| Task 10 | Pending | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | - | - | - |
+| Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
+| Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
+| Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
+| Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
+## Completion Ledger
+
+> This ledger is updated in each task PR. A task is checked only after its worktree branch has a completion commit and verification evidence. Merge hashes are recorded in PR history; task completion commits are listed here for stable local traceability.
+
+| Task | Status | Worktree | Branch | Completion commit(s) | Subagent | Human modifications |
+| --- | --- | --- | --- | --- | --- | --- |
+| Task 1 | Done | `.worktrees/task-1-scaffold` | `codex/task-1-scaffold` | `3b75b00d`, `21eb8255` | codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input | Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored. |
 | Task 2 | Pending | `.worktrees/task-2-contracts` | `codex/task-2-contracts` | - | - | - |
 | Task 3 | Pending | `.worktrees/task-3-url-parser` | `codex/task-3-url-parser` | - | - | - |
 | Task 4 | Pending | `.worktrees/task-4-github` | `codex/task-4-github` | - | - | - |
@@ -258,7 +298,7 @@ git commit -m "chore: scaffold pr manager app"
 - Add a `jsonError(error, fallbackCode, fallbackStatus)` helper that redacts caught errors before building `NextResponse.json(...)` route responses.
 - Add `reportToMarkdown(report)` returning stable English Markdown.
 
-- [ ] **Step 1: Write failing report schema tests**
+- [x] **Step 1: Write failing report schema tests**
 
 Create `test/report-schema.test.ts`:
 
@@ -329,13 +369,13 @@ describe("api errors", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/report-schema.test.ts test/errors.test.ts`
 
 Expected: FAIL because `lib/report-schema.ts`, `lib/errors.ts`, and fixtures do not exist.
 
-- [ ] **Step 3: Implement minimal types and schema**
+- [x] **Step 3: Implement minimal types and schema**
 
 Create `test/fixtures/report.ts` with a valid fixed report:
 
@@ -371,7 +411,7 @@ Implement `parseAnalysisReport(input: unknown): AnalysisReport` in `lib/report-s
 
 Implement `createApiError` and `redactSecrets` in `lib/errors.ts`.
 
-- [ ] **Step 4: Run schema verification**
+- [x] **Step 4: Run schema verification**
 
 Run:
 
@@ -382,7 +422,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/types.ts lib/errors.ts lib/report-schema.ts lib/report-markdown.ts test/report-schema.test.ts test/errors.test.ts test/fixtures/report.ts
@@ -412,7 +452,7 @@ git commit -m "feat: add shared report contracts"
 - Reject issue URLs, commit URLs, non-GitHub hosts, missing owner/repo, and non-numeric PR numbers.
 - Return `type: "repo"` or `type: "pull"`.
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Create `test/url.test.ts`:
 
@@ -473,13 +513,13 @@ describe("POST /api/github/parse-url", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/url.test.ts test/api-parse-url.test.ts`
 
 Expected: FAIL because parser and API route do not exist.
 
-- [ ] **Step 3: Implement parser and route**
+- [x] **Step 3: Implement parser and route**
 
 Create parser signature:
 
@@ -506,7 +546,7 @@ export function parseGitHubUrl(rawUrl: string): ParsedGitHubUrl {
 
 Create route that reads JSON `{ url }`, calls parser, returns 200, and returns 400 with `INVALID_GITHUB_URL` or `UNSUPPORTED_GITHUB_URL` on failure.
 
-- [ ] **Step 4: Run parser verification**
+- [x] **Step 4: Run parser verification**
 
 Run:
 
@@ -517,7 +557,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add lib/url.ts app/api/github/parse-url/route.ts test/url.test.ts test/api-parse-url.test.ts
