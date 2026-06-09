@@ -7,6 +7,9 @@ import { HistoryPanel } from "../components/HistoryPanel";
 import { LinkInput } from "../components/LinkInput";
 import { PullRequestPicker } from "../components/PullRequestPicker";
 import { PullRequestSummary } from "../components/PullRequestSummary";
+import { ReportViewer } from "../components/ReportViewer";
+import { ReviewDraft } from "../components/ReviewDraft";
+import { ScoreOverview } from "../components/ScoreOverview";
 import { SettingsPanel } from "../components/SettingsPanel";
 import {
   analyzePullRequestWithApi,
@@ -26,6 +29,7 @@ import type {
   PullRequestDetail,
   PullRequestSummary as PullRequestSummaryData,
   RepositoryRef,
+  ReviewCommentDraft,
 } from "../lib/types";
 import type { ParsedGitHubUrl } from "../lib/url";
 
@@ -54,6 +58,8 @@ export default function HomePage() {
   const [errorSource, setErrorSource] = useState<ErrorSource | null>(null);
   const [analysisStage, setAnalysisStage] = useState<AnalysisStage | undefined>();
   const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<ReviewCommentDraft | null>(null);
+  const [historyPersisted, setHistoryPersisted] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const selectedSummary = selectedPullRequest ? getPullRequestSummary(selectedPullRequest) : null;
@@ -85,8 +91,7 @@ export default function HomePage() {
   async function handleLinkSubmit(rawUrl: string): Promise<LinkStatus> {
     setErrorMessage(null);
     setErrorSource(null);
-    setReport(null);
-    setAnalysisStage(undefined);
+    clearGeneratedAnalysis();
     setFlowStatus("loading");
 
     const parsed = await parseUrlForFlow(rawUrl);
@@ -156,17 +161,22 @@ export default function HomePage() {
     setRepository(null);
     setPullRequests([]);
     setSelectedPullRequest(null);
-    setReport(null);
-    setAnalysisStage(undefined);
+    clearGeneratedAnalysis();
   }
 
   function handlePullRequestSelect(pullRequest: PullRequestSummaryData) {
     setSelectedPullRequest(pullRequest);
-    setReport(null);
-    setAnalysisStage(undefined);
+    clearGeneratedAnalysis();
     setErrorMessage(null);
     setErrorSource(null);
     setFlowStatus("prReady");
+  }
+
+  function clearGeneratedAnalysis() {
+    setReport(null);
+    setReviewDraft(null);
+    setHistoryPersisted(false);
+    setAnalysisStage(undefined);
   }
 
   async function handleAnalyze() {
@@ -178,6 +188,8 @@ export default function HomePage() {
     setErrorMessage(null);
     setErrorSource(null);
     setReport(null);
+    setReviewDraft(null);
+    setHistoryPersisted(false);
     setAnalysisStage("calling-llm");
 
     try {
@@ -187,15 +199,25 @@ export default function HomePage() {
         repo: selectedSummary.repo,
         pullNumber: selectedSummary.number,
       });
+      const historyId = createHistoryId(selectedSummary);
+      const historyRecord = createHistoryRecord(
+        historyId,
+        repository,
+        selectedSummary,
+        selectedPullRequest,
+        nextReport,
+      );
       setReport(nextReport);
+      setReviewDraft(historyRecord.reviewDraft);
       setAnalysisStage("saving-history");
-      await saveHistoryRecord(createHistoryRecord(repository, selectedSummary, selectedPullRequest, nextReport));
+      await saveHistoryRecord(historyRecord);
+      setHistoryPersisted(true);
       setHistoryRefreshKey((current) => current + 1);
       setFlowStatus("done");
     } catch (error) {
       setFlowStatus("error");
       setErrorSource(error instanceof ClientApiError ? "analysis" : "storage");
-      setErrorMessage(readErrorMessage(error, "分析失败"));
+      setErrorMessage(readErrorMessage(error, error instanceof ClientApiError ? "分析失败" : "历史保存失败"));
     }
   }
 
@@ -227,6 +249,18 @@ export default function HomePage() {
             {flowStatus === "analyzing" || flowStatus === "done" ? (
               <AnalysisProgress currentStage={analysisStage} done={flowStatus === "done"} />
             ) : null}
+            {report ? <ScoreOverview report={report} /> : null}
+            {report ? <ReportViewer report={report} /> : null}
+            {reviewDraft && selectedSummary ? (
+              <ReviewDraft
+                draft={reviewDraft}
+                githubToken={config.githubToken}
+                owner={selectedSummary.owner}
+                persisted={historyPersisted}
+                pullNumber={selectedSummary.number}
+                repo={selectedSummary.repo}
+              />
+            ) : null}
             <section aria-labelledby="status-heading" className="rounded-md border border-neutral-200 bg-white px-5 py-5">
               <h2 className="text-sm font-semibold text-neutral-950" id="status-heading">
                 状态
@@ -238,7 +272,7 @@ export default function HomePage() {
                 </div>
                 <div className="py-3 sm:pl-4">
                   <p className="text-xs text-neutral-500">报告状态</p>
-                  <p className="mt-1 text-sm font-medium text-neutral-950">{reportStatusText(flowStatus, report)}</p>
+                  <p className="mt-1 text-sm font-medium text-neutral-950">{reportStatusText(flowStatus, report, historyPersisted)}</p>
                 </div>
               </div>
               {errorMessage ? (
@@ -293,12 +327,12 @@ function toRepositoryRef(owner: string, repo: string): RepositoryRef {
 }
 
 function createHistoryRecord(
+  id: string,
   repository: RepositoryRef | null,
   summary: PullRequestSummaryData,
   selectedPullRequest: SelectedPullRequest | null,
   report: AnalysisReport,
 ): HistoryRecord {
-  const id = createHistoryId(summary);
   const detail = selectedPullRequest && "summary" in selectedPullRequest ? selectedPullRequest : undefined;
 
   return {
@@ -348,13 +382,17 @@ function repositoryStatusText(
   return "待加载链接";
 }
 
-function reportStatusText(flowStatus: FlowStatus, report: AnalysisReport | null): string {
+function reportStatusText(flowStatus: FlowStatus, report: AnalysisReport | null, historyPersisted: boolean): string {
   if (flowStatus === "analyzing") {
     return "分析中";
   }
 
   if (flowStatus === "done" && report) {
     return "报告已生成";
+  }
+
+  if (report && !historyPersisted) {
+    return "报告已生成，历史未保存";
   }
 
   return "待生成报告";

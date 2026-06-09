@@ -26,7 +26,7 @@
 | Task 8 | Done | `.worktrees/task-8-analyze` | `codex/task-8-analyze` | `4d89931e` | codex/task-8-analyze implementation agent | Codex kept /api/github/pull-detail separate from context collection and routed context ownership into /api/analyze. |
 | Task 9 | Done | `.worktrees/task-9-dashboard` | `codex/task-9-dashboard` | `60d3b50b`, `e23a8a81` | codex/task-9-dashboard implementation agent | Codex hardened storage error UI and made mounted-state behavior explicit in tests. |
 | Task 10 | Done | `.worktrees/task-10-pr-flow` | `codex/task-10-pr-flow` | `01ec8701`, `2b21d726`, `b56d1d90` | codex/task-10-pr-flow implementation agent | Codex fixed recoverable error-state transitions and refreshed history after successful analysis. |
-| Task 11 | Pending | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | - | - | - |
+| Task 11 | Done | `.worktrees/task-11-report-comment` | `codex/task-11-report-comment` | `7dffc195`, `8406e0f7`, `a55fe6f0` | codex/task-11-report-comment implementation agent | Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests. |
 | Task 12 | Pending | `.worktrees/task-12-final-polish` | `codex/task-12-final-polish` | - | - | - |
 | Task 13 | Pending | `.worktrees/task-13-history-reopen` | `codex/task-13-history-reopen` | - | - | - |
 | Task 14 | Pending | `.worktrees/task-14-llm-base-url` | `codex/task-14-llm-base-url` | - | - | - |
@@ -1660,7 +1660,7 @@ git commit -m "feat: connect pull request selection flow"
 - Publish button requires confirmation, disables during request, and calls `/api/github/comment`.
 - Failed publish keeps the draft visible and copyable.
 
-- [ ] **Step 1: Write failing report/comment tests**
+- [x] **Step 1: Write failing report/comment tests**
 
 Create `test/ui-report-comment.test.tsx`:
 
@@ -1766,13 +1766,13 @@ function pullSummary() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- test/ui-report-comment.test.tsx`
 
 Expected: FAIL because report rendering and publishing are not wired.
 
-- [ ] **Step 3: Implement report and publishing UI**
+- [x] **Step 3: Implement report and publishing UI**
 
 Add these components:
 
@@ -1782,7 +1782,7 @@ Add these components:
 
 On successful analysis, create a `HistoryRecord` with generated `crypto.randomUUID()`, set `reviewDraft.sourceReportId` to that same history id, call `saveHistoryRecord`, and only then mark the UI as `done`.
 
-- [ ] **Step 4: Run report verification**
+- [x] **Step 4: Run report verification**
 
 Run:
 
@@ -1793,7 +1793,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/page.tsx components/ScoreOverview.tsx components/ReportViewer.tsx components/ReviewDraft.tsx test/ui-report-comment.test.tsx

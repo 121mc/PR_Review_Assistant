@@ -88,3 +88,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-10-pr-flow implementation agent; completion commit(s): `01ec8701`, `2b21d726`, `b56d1d90`; branch: `codex/task-10-pr-flow`; worktree: `.worktrees/task-10-pr-flow`.
 - **Human intervention:** Codex fixed recoverable error-state transitions and refreshed history after successful analysis.
 - **Lesson learned:** UI state machines need explicit recovery paths after parse, GitHub, analysis, and storage errors.
+
+## 2026-06-09T03:48:38+08:00 - Task 11: Report rendering, review draft publishing, and history save
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `requesting-code-review`.
+- **Key prompt / context:** Render validated reports, save analysis history, show a copyable review draft, and publish one confirmed GitHub PR comment.
+- **Subagent output:** codex/task-11-report-comment implementation agent; completion commit(s): `7dffc195`, `8406e0f7`, `a55fe6f0`; branch: `codex/task-11-report-comment`; worktree: `.worktrees/task-11-report-comment`.
+- **Human intervention:** Codex added invalid comment URL validation and XSS-oriented Markdown rendering tests.
+- **Lesson learned:** LLM Markdown and provider-returned URLs are untrusted output and need validation/sanitization.
