@@ -112,3 +112,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-13-history-reopen hardening agent; completion commit(s): `8598d887`; branch: `codex/task-13-history-reopen`; worktree: `.worktrees/task-13-history-reopen`.
 - **Human intervention:** Codex added the post-plan hardening task after manual review of learner workflows.
 - **Lesson learned:** History is only useful if records can be reopened into the same working context.
+
+## 2026-06-09T09:20:13+08:00 - Task 14: LLM base URL validation hardening
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `systematic-debugging`.
+- **Key prompt / context:** Validate LLM base URL shape before network calls so misconfiguration returns a field-specific API error.
+- **Subagent output:** codex/task-14-llm-base-url hardening agent; completion commit(s): `4e337e59`; branch: `codex/task-14-llm-base-url`; worktree: `.worktrees/task-14-llm-base-url`.
+- **Human intervention:** Codex added the hardening task from manual API review and covered it with route tests.
+- **Lesson learned:** Configuration errors should fail fast before provider calls, especially when secrets are involved.

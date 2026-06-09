@@ -59,6 +59,15 @@ function readAnalyzeRequest(body: unknown): AnalyzeRequest {
     );
   }
 
+  if (!isValidHttpUrl(llm.baseUrl)) {
+    throw createApiError(
+      "CONFIG_INVALID",
+      "LLM Base URL must be a valid HTTP(S) URL.",
+      { invalid: ["llm.baseUrl"] },
+      400,
+    );
+  }
+
   return { owner, repo, pullNumber, githubToken, llm };
 }
 
@@ -89,4 +98,13 @@ function readRequiredPositiveInteger(record: Record<string, unknown>, field: str
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
