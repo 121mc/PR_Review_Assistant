@@ -16,3 +16,11 @@ This log records the PR Review Assistant implementation process in chronological
 - **Subagent output:** codex/task-1-scaffold implementation agent; Gemini cold-start feedback was used as review input; completion commit(s): `3b75b00d`, `21eb8255`; branch: `codex/task-1-scaffold`; worktree: `.worktrees/task-1-scaffold`.
 - **Human intervention:** Codex reviewed scaffold output, resolved review feedback, and kept worktree directories ignored.
 - **Lesson learned:** Start with a tiny health test and scripts so later subagents can verify quickly.
+
+## 2026-06-08T23:07:38+08:00 - Task 2: Shared domain contracts, API errors, and report schema
+
+- **Triggered Superpowers skills:** `subagent-driven-development`, `test-driven-development`, `requesting-code-review`.
+- **Key prompt / context:** Implement shared report types, Zod validation, and redacted API errors for strict LLM output.
+- **Subagent output:** codex/task-2-contracts implementation agent; Gemini cold-start validation informed schema constraints; completion commit(s): `58a957e5`, `a8191d6c`, `9da84ad5`; branch: `codex/task-2-contracts`; worktree: `.worktrees/task-2-contracts`.
+- **Human intervention:** Codex hardened secret redaction and decoupled error helpers from Next server-only APIs.
+- **Lesson learned:** Keep contracts framework-light so tests can exercise them outside App Router.
