@@ -22,7 +22,7 @@
 
 ### Task 1: Docker Build Context
 
-- [ ] **Step 1: Create `.dockerignore`**
+- [x] **Step 1: Create `.dockerignore`**
 
 Create a Docker ignore file with:
 
@@ -47,7 +47,7 @@ Dockerfile
 docker-compose.yml
 ```
 
-- [ ] **Step 2: Review context exclusions**
+- [x] **Step 2: Review context exclusions**
 
 Run: `Get-Content .dockerignore`
 
@@ -55,7 +55,7 @@ Expected: the file excludes local dependencies, build output, git metadata, work
 
 ### Task 2: Next.js Standalone Image
 
-- [ ] **Step 1: Enable standalone output**
+- [x] **Step 1: Enable standalone output**
 
 Modify `next.config.ts` so `nextConfig` includes:
 
@@ -63,7 +63,7 @@ Modify `next.config.ts` so `nextConfig` includes:
 output: "standalone",
 ```
 
-- [ ] **Step 2: Create `Dockerfile`**
+- [x] **Step 2: Create `Dockerfile`**
 
 Create:
 
@@ -100,13 +100,13 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 CMD ["node", "server.js"]
 ```
 
-- [ ] **Step 3: Adjust for missing `public` directory**
+- [x] **Step 3: Adjust for missing `public` directory**
 
 If the repository has no `public` directory, remove the `COPY --from=builder /app/public ./public` line so Docker builds successfully.
 
 ### Task 3: Container Lockfile Compatibility
 
-- [ ] **Step 1: Reproduce lockfile compatibility with container npm**
+- [x] **Step 1: Reproduce lockfile compatibility with container npm**
 
 Run:
 
@@ -116,7 +116,7 @@ docker run --rm -v ${PWD}:/app -w /app node:24-alpine npm ci --dry-run
 
 Expected before the lockfile refresh: npm may fail if the existing lockfile is missing platform-specific optional peer package entries required by the npm version bundled in `node:24-alpine`.
 
-- [ ] **Step 2: Refresh only the lockfile**
+- [x] **Step 2: Refresh only the lockfile**
 
 Run:
 
@@ -126,7 +126,7 @@ docker run --rm -v ${PWD}:/app -w /app node:24-alpine npm install --package-lock
 
 Expected: `package-lock.json` is updated; `package.json` is unchanged.
 
-- [ ] **Step 3: Verify container npm can read the lockfile**
+- [x] **Step 3: Verify container npm can read the lockfile**
 
 Run:
 
@@ -138,7 +138,7 @@ Expected: command exits with code `0`.
 
 ### Task 4: Compose Entrypoint
 
-- [ ] **Step 1: Create `docker-compose.yml`**
+- [x] **Step 1: Create `docker-compose.yml`**
 
 Create:
 
@@ -156,7 +156,7 @@ services:
     restart: unless-stopped
 ```
 
-- [ ] **Step 2: Validate Compose syntax**
+- [x] **Step 2: Validate Compose syntax**
 
 Run: `docker compose config`
 
@@ -164,7 +164,7 @@ Expected: config renders one `pr-manager` service with port `3000:3000`.
 
 ### Task 5: Docker Hub CI
 
-- [ ] **Step 1: Create `.github/workflows/docker-image.yml`**
+- [x] **Step 1: Create `.github/workflows/docker-image.yml`**
 
 Create a workflow that:
 
@@ -212,7 +212,7 @@ jobs:
           cache-to: type=gha,mode=max
 ```
 
-- [ ] **Step 2: Validate workflow file exists**
+- [x] **Step 2: Validate workflow file exists**
 
 Run: `Get-Content .github/workflows/docker-image.yml`
 
@@ -220,7 +220,7 @@ Expected: workflow includes Docker Buildx and Docker Hub login before push.
 
 ### Task 6: README Documentation
 
-- [ ] **Step 1: Add Docker instructions**
+- [x] **Step 1: Add Docker instructions**
 
 Add commands:
 
@@ -239,7 +239,7 @@ Document port `3000`, optional `PORT` and `NEXT_TELEMETRY_DISABLED`, and Docker 
 
 ### Task 7: Verification
 
-- [ ] **Step 1: Run app checks**
+- [x] **Step 1: Run app checks**
 
 Run:
 
@@ -252,19 +252,19 @@ npm run build
 
 Expected: every command exits with code `0`.
 
-- [ ] **Step 2: Build Docker image**
+- [x] **Step 2: Build Docker image**
 
 Run: `docker build -t 121mc/pr-manager:local .`
 
 Expected: image builds successfully.
 
-- [ ] **Step 3: Run Docker image**
+- [x] **Step 3: Run Docker image**
 
 Run: `docker run --rm -p 3000:3000 121mc/pr-manager:local`
 
 Expected: Next.js server listens on `0.0.0.0:3000`.
 
-- [ ] **Step 4: Check health endpoint**
+- [x] **Step 4: Check health endpoint**
 
 Run: `Invoke-RestMethod http://localhost:3000/api/health`
 

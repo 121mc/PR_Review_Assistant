@@ -6,8 +6,8 @@
 
 本轮 spec 与 plan 主要由 `codex：gpt-5.5-high` 完成，使用了 Superpowers 的 `brainstorming` 和 `writing-plans`。最终文档为：
 
-- `docs/superpowers/specs/2026-06-08-pr-manager-design.md`
-- `docs/superpowers/plans/2026-06-08-pr-manager-implementation.md`
+- `SPEC.md`
+- `PLAN.md`
 
 ## Brainstorming 过程
 

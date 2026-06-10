@@ -76,6 +76,23 @@ Set these repository secrets before publishing:
 - `DOCKERHUB_USERNAME`: `121mc`
 - `DOCKERHUB_TOKEN`: a Docker Hub access token with permission to push `121mc/pr-manager`
 
+## Project Structure
+
+```text
+app/                 Next.js App Router pages and local API routes
+components/          React UI components for settings, PR flow, reports, and history
+lib/                 Shared TypeScript clients, schemas, storage, and context logic
+test/                Vitest unit, route, component, and mocked happy-path tests
+docs/superpowers/    Containerization spec and plan notes
+.github/workflows/   GitHub Actions CI and Docker image publishing workflow
+```
+
+Key process documents are kept at the repository root: `SPEC.md`, `PLAN.md`, `SPEC_PROCESS.md`, `AGENT_LOG.md`, and `REFLECTION.md`.
+
+## Third-Party Dependencies And Licenses
+
+This project does not vendor third-party source code. Runtime and development dependencies are installed from npm and are listed in `package.json` and `package-lock.json`; their package metadata contains the applicable licenses.
+
 ## Credentials
 
 Store credentials in the settings panel. They are saved in browser localStorage and sent only to local API routes during requests.
