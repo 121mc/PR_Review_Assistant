@@ -1,0 +1,11 @@
+services:
+  pr-manager:
+    image: 121mc/pr-manager:local
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    restart: unless-stopped

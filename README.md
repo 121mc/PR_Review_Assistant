@@ -20,6 +20,62 @@ npm run lint
 npm run build
 ```
 
+## Run With Docker
+
+Build the image:
+
+```powershell
+docker build -t 121mc/pr-manager:local .
+```
+
+Start the app:
+
+```powershell
+docker run --rm -p 3000:3000 121mc/pr-manager:local
+```
+
+Open http://localhost:3000.
+
+You can also run the Compose service:
+
+```powershell
+docker compose up --build
+```
+
+Docker Hub image address:
+
+[121mc/pr-manager](https://hub.docker.com/r/121mc/pr-manager)
+
+After the first successful CI push, run the public image with:
+
+```powershell
+docker run --rm -p 3000:3000 121mc/pr-manager:latest
+```
+
+## Ports And Environment Variables
+
+The container listens on port `3000` by default. Map it with `-p 3000:3000` or set a different container port with `PORT`.
+
+Runtime environment variables:
+
+- `PORT`: optional Next.js server port inside the container. Default: `3000`.
+- `HOSTNAME`: optional bind address inside the container. Default: `0.0.0.0`.
+- `NEXT_TELEMETRY_DISABLED`: optional Next.js telemetry flag. Default in the image: `1`.
+
+No GitHub or LLM secrets are required as server environment variables. Enter GitHub and OpenAI-compatible LLM credentials in the app settings panel; they are stored in browser localStorage and sent only to local API routes during requests.
+
+## Docker Hub Publishing
+
+GitHub Actions builds the Docker image for pull requests and pushes. Pushes to `master` also publish:
+
+- `121mc/pr-manager:latest`
+- `121mc/pr-manager:<commit-sha>`
+
+Set these repository secrets before publishing:
+
+- `DOCKERHUB_USERNAME`: `121mc`
+- `DOCKERHUB_TOKEN`: a Docker Hub access token with permission to push `121mc/pr-manager`
+
 ## Credentials
 
 Store credentials in the settings panel. They are saved in browser localStorage and sent only to local API routes during requests.
