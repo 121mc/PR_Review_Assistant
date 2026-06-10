@@ -1,5 +1,7 @@
 # Web PR Manager
 
+GitHub repository: [121mc/PR_Review_Assistant](https://github.com/121mc/PR_Review_Assistant)
+
 Local-first PR review assistant for personal developers and students. Paste a GitHub repository or pull request URL, choose a PR, and generate a structured English review report from the Chinese UI.
 
 ## Run Locally
