@@ -96,6 +96,7 @@ This log records the PR Review Assistant implementation process in chronological
 - **Triggered Superpowers skills:** `writing-plans`, `subagent-driven-development`, `verification-before-completion`.
 - **Key prompt / context:** Add production Docker packaging, Docker Compose, GitHub Actions test/build/image workflow, Docker Hub publishing tags, and README Docker instructions. Containerization spec and plan were recorded under `docs/superpowers/`.
 - **Subagent output:** codex/containerization implementation agent; completion commit(s): `5f243461`; branch: `codex/containerization`; worktree: main project workspace.
+- **PR workflow repair:** The Task 15 implementation commit reached `origin/master` before a dedicated Task 15 PR was opened. A follow-up process-evidence branch, `codex/task-15-pr-evidence`, records this gap explicitly instead of rewriting or pretending the original history was different.
 
 ## 总结与反思
 
